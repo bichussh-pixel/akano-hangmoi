@@ -1,9 +1,7 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import AppLayout from '@/components/layouts/AppLayout'
 import dynamic from 'next/dynamic'
 
-// Disable SSR — PricingContent relies on client-only APIs (chat polling, etc.)
+// Render entirely on client — avoids any server-side crash
 const PricingContent = dynamic(() => import('./PricingContent'), {
   ssr: false,
   loading: () => (
@@ -18,21 +16,10 @@ const PricingContent = dynamic(() => import('./PricingContent'), {
   ),
 })
 
-export default async function PricingPage() {
-  const session = await auth()
-  if (!session) redirect('/login')
-  const role = (session.user as any)?.role
-  if (!['BUYER', 'LEADER_PM'].includes(role)) redirect('/dashboard')
-
-  const user = {
-    id: (session.user as any).id ?? '',
-    name: session.user?.name ?? '',
-    role: role as string,
-  }
-
+export default function PricingPage() {
   return (
     <AppLayout>
-      <PricingContent currentUser={user} />
+      <PricingContent />
     </AppLayout>
   )
 }

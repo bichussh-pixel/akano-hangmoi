@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { calculateLandedCost } from '@/lib/calc'
 import ChatBox from '@/components/ui/ChatBox'
 
@@ -22,10 +23,6 @@ interface Product {
   importTaxPct?: number
 }
 
-interface PricingContentProps {
-  currentUser: { id: string; name: string; role: string }
-}
-
 function fmtNum(n: number) {
   return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
@@ -33,7 +30,13 @@ function fmt(n: number) {
   return fmtNum(n) + 'đ'
 }
 
-export default function PricingContent({ currentUser }: PricingContentProps) {
+export default function PricingContent() {
+  const { data: session, status } = useSession()
+  const currentUser = {
+    id: (session?.user as any)?.id ?? '',
+    name: session?.user?.name ?? '',
+    role: (session?.user as any)?.role ?? '',
+  }
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -50,11 +53,12 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
   }
 
   useEffect(() => {
+    if (status === 'loading') return
     fetch('/api/pricing/products')
       .then(r => r.json())
       .then(data => { setProducts(Array.isArray(data) ? data : (data.products || [])); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [])
+  }, [status])
 
   function updateForm(productId: string, field: string, value: any) {
     setForms(prev => ({ ...prev, [productId]: { ...(prev[productId] || {}), [field]: value } }))
