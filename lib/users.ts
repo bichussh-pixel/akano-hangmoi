@@ -5,7 +5,7 @@
 import type { AppUser } from './firebase'
 
 // bcrypt hash của 'akano2026'
-const PW = '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'
+const PW = '$2b$10$CS9pmDJg4R1dpq6qGSkU7u84HPPnVs58HhBvVU95yi7QR9fHh8/0S'
 
 export const USERS: AppUser[] = [
   { id: 'user_bich',  name: 'Bích',        email: 'bich@akano.vn',  role: 'ADMIN',     password: PW },
