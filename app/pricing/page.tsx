@@ -1,7 +1,22 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import AppLayout from '@/components/layouts/AppLayout'
-import PricingContent from './PricingContent'
+import dynamic from 'next/dynamic'
+
+// Disable SSR — PricingContent relies on client-only APIs (chat polling, etc.)
+const PricingContent = dynamic(() => import('./PricingContent'), {
+  ssr: false,
+  loading: () => (
+    <div>
+      <h1 className="text-2xl font-bold text-[#111827] mb-6">💰 Check giá</h1>
+      <div className="space-y-3 animate-pulse">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="bg-white rounded-xl border border-[#E5E7EB] h-20" />
+        ))}
+      </div>
+    </div>
+  ),
+})
 
 export default async function PricingPage() {
   const session = await auth()
@@ -10,9 +25,9 @@ export default async function PricingPage() {
   if (!['BUYER', 'LEADER_PM'].includes(role)) redirect('/dashboard')
 
   const user = {
-    id: (session.user as any).id,
-    name: session.user?.name || '',
-    role: (session.user as any).role,
+    id: (session.user as any).id ?? '',
+    name: session.user?.name ?? '',
+    role: role as string,
   }
 
   return (
