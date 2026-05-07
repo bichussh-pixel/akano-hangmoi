@@ -35,7 +35,10 @@ function parsePrice(s: string): number {
 }
 
 function fmt(n: number) {
-  return Math.round(n || 0).toLocaleString('vi-VN') + '₫'
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+}
+function fmtNum(n: number) {
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
 function isUrl(s?: string): boolean {
@@ -368,10 +371,10 @@ export default function ReviewContent() {
                       {(p.sales30d > 0 || p.sellerCount > 0) && (
                         <div className="flex flex-wrap gap-3 text-xs mb-1">
                           {p.sales30d > 0 && (
-                            <span className="text-[#374151]">📦 <b>{(p.sales30d).toLocaleString('vi-VN')}</b> đơn/30 ngày</span>
+                            <span className="text-[#374151]">📦 <b>{fmtNum(p.sales30d)}</b> đơn/30 ngày</span>
                           )}
                           {p.sellerCount > 0 && (
-                            <span className="text-[#6B7280]">🏪 <b>{(p.sellerCount).toLocaleString('vi-VN')}</b> shop đang bán</span>
+                            <span className="text-[#6B7280]">🏪 <b>{fmtNum(p.sellerCount)}</b> shop đang bán</span>
                           )}
                         </div>
                       )}

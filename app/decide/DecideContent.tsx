@@ -29,7 +29,7 @@ interface DecideContentProps {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('vi-VN') + '₫'
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
 }
 
 export default function DecideContent({ currentUser }: DecideContentProps) {

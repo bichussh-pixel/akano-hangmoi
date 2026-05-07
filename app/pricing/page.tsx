@@ -6,7 +6,8 @@ import PricingContent from './PricingContent'
 export default async function PricingPage() {
   const session = await auth()
   if (!session) redirect('/login')
-  if ((session.user as any)?.role !== 'BUYER') redirect('/dashboard')
+  const role = (session.user as any)?.role
+  if (!['BUYER', 'LEADER_PM'].includes(role)) redirect('/dashboard')
 
   const user = {
     id: (session.user as any).id,

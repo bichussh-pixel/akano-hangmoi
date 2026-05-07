@@ -105,7 +105,7 @@ export default function KiotContent({ currentUser }: { currentUser: { id: string
                     {product.checkCode}
                   </span>
                   <h3 className="text-sm font-semibold text-[#111827] mt-1">{product.name}</h3>
-                  <p className="text-xs text-[#6B7280]">Giá thị trường: {product.marketPrice.toLocaleString('vi-VN')}₫</p>
+                  <p className="text-xs text-[#6B7280]">Giá thị trường: {Math.round(product.marketPrice).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}đ</p>
                 </div>
                 <a
                   href={KIOT_SCRIPT_URL}

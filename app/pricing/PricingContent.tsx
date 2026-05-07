@@ -26,8 +26,11 @@ interface PricingContentProps {
   currentUser: { id: string; name: string; role: string }
 }
 
+function fmtNum(n: number) {
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
 function fmt(n: number) {
-  return n.toLocaleString('vi-VN') + '₫'
+  return fmtNum(n) + 'đ'
 }
 
 export default function PricingContent({ currentUser }: PricingContentProps) {
@@ -189,12 +192,12 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                     {/* Daily rate info */}
                     {dr && (
                       <div className="bg-[#F9FAFB] rounded-lg px-4 py-3 flex flex-wrap gap-4 text-xs text-[#6B7280]">
-                        <span>💱 Tỷ giá: <strong className="text-[#111827]">{dr.fxRate?.toLocaleString('vi-VN')} VND/CNY</strong></span>
+                        <span>💱 Tỷ giá: <strong className="text-[#111827]">{fmtNum(dr.fxRate)} VND/CNY</strong></span>
                         {dr.intlFreightNguyenXe != null && (
-                          <span>🚛 Nguyên Xe: <strong className="text-[#111827]">{dr.intlFreightNguyenXe?.toLocaleString('vi-VN')}đ/m³</strong></span>
+                          <span>🚛 Nguyên Xe: <strong className="text-[#111827]">{fmtNum(dr.intlFreightNguyenXe)}đ/m³</strong></span>
                         )}
                         {dr.intlFreightGhepXe != null && (
-                          <span>📦 Ghép Xe: <strong className="text-[#111827]">{dr.intlFreightGhepXe?.toLocaleString('vi-VN')}đ/m³</strong></span>
+                          <span>📦 Ghép Xe: <strong className="text-[#111827]">{fmtNum(dr.intlFreightGhepXe)}đ/m³</strong></span>
                         )}
                       </div>
                     )}
@@ -220,7 +223,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                             >
                               {opt.label}
                               {opt.rate != null && (
-                                <span className="ml-1 text-xs opacity-75">({opt.rate.toLocaleString('vi-VN')}đ/m³)</span>
+                                <span className="ml-1 text-xs opacity-75">({fmtNum(opt.rate)}đ/m³)</span>
                               )}
                             </button>
                           ))}

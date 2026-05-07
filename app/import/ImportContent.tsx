@@ -46,7 +46,10 @@ function getCol(row: Record<string, unknown>, key: string): string {
 }
 
 function fmt(n: number) {
-  return Math.round(n || 0).toLocaleString('vi-VN') + '₫'
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+}
+function fmtNum(n: number) {
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
 function isUrl(s?: string): boolean {
@@ -229,11 +232,11 @@ export default function ImportContent() {
           {/* Stats row */}
           <div className="flex flex-wrap gap-3 text-xs mb-2">
             <span className="text-[#374151] font-medium">
-              📦 <span className="font-bold text-[#111827]">{(p.sales30d || 0).toLocaleString('vi-VN')}</span> đơn/30 ngày
+              📦 <span className="font-bold text-[#111827]">{fmtNum(p.sales30d || 0)}</span> đơn/30 ngày
             </span>
             {(p.sellerCount || p.seller_count) > 0 && (
               <span className="text-[#6B7280]">
-                🏪 <span className="font-semibold text-[#374151]">{(p.sellerCount || p.seller_count).toLocaleString('vi-VN')}</span> shop đang bán
+                🏪 <span className="font-semibold text-[#374151]">{fmtNum(p.sellerCount || p.seller_count || 0)}</span> shop đang bán
               </span>
             )}
           </div>
