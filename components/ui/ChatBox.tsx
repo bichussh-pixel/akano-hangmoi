@@ -5,8 +5,9 @@ import { useState, useEffect, useRef } from 'react'
 interface Message {
   id: string
   content: string
-  createdAt: string
-  sender: { id: string; name: string }
+  createdAt: number
+  senderId: string
+  senderName: string
 }
 
 interface ChatBoxProps {
@@ -67,13 +68,12 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
           <p className="text-xs text-[#6B7280] text-center py-4">Chưa có tin nhắn</p>
         )}
         {messages.map((msg) => {
-          const isMine = msg.sender.id === currentUser.id
-          const isAdmin = currentUser.role === 'ADMIN' ? isMine : msg.sender.name === 'Bích'
+          const isMine = msg.senderId === currentUser.id
           return (
             <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
               <div className="max-w-[75%]">
                 {!isMine && (
-                  <div className="text-xs text-[#6B7280] mb-1">{msg.sender.name}</div>
+                  <div className="text-xs text-[#6B7280] mb-1">{msg.senderName}</div>
                 )}
                 <div
                   className="px-3 py-2 rounded-xl text-sm"
@@ -85,7 +85,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
                   {msg.content}
                 </div>
                 <div className="text-xs text-[#6B7280] mt-0.5">
-                  {new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </div>
               </div>
             </div>
