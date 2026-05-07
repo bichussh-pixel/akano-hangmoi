@@ -1,9 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Component } from 'react'
 import { useSession } from 'next-auth/react'
 import { calculateLandedCost } from '@/lib/calc'
 import ChatBox from '@/components/ui/ChatBox'
+
+// Local error boundary to prevent ChatBox or any child crash from killing the page
+class SafeBox extends Component<{ children: React.ReactNode }, { err: string | null }> {
+  constructor(props: any) { super(props); this.state = { err: null } }
+  static getDerivedStateFromError(e: Error) { return { err: e.message } }
+  render() {
+    if (this.state.err) return (
+      <div className="text-xs text-red-500 bg-red-50 rounded p-2">
+        Lỗi hiển thị: {this.state.err}
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 interface DailyRate {
   fxRate: number
@@ -174,6 +188,7 @@ export default function PricingContent() {
               <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
                 {/* Header */}
                 <button
+                  type="button"
                   className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#FAFAFA]"
                   onClick={() => setExpanded(isOpen ? null : product.id)}
                 >
@@ -192,6 +207,7 @@ export default function PricingContent() {
                 </button>
 
                 {isOpen && (
+                  <SafeBox>
                   <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4 space-y-5">
                     {/* Daily rate info */}
                     {dr && (
@@ -216,6 +232,7 @@ export default function PricingContent() {
                             { value: 'ghep_xe', label: '📦 Ghép Xe', rate: dr.intlFreightGhepXe },
                           ].map(opt => (
                             <button
+                              type="button"
                               key={opt.value}
                               onClick={() => setFreightTypes(prev => ({ ...prev, [product.id]: opt.value as any }))}
                               className="flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors"
@@ -359,9 +376,12 @@ export default function PricingContent() {
                     </div>
 
                     {/* Chat */}
-                    <ChatBox productId={product.id} currentUser={currentUser} />
+                    <SafeBox>
+                      <ChatBox productId={product.id} currentUser={currentUser} />
+                    </SafeBox>
 
                     <button
+                      type="button"
                       onClick={() => submitPricing(product)}
                       disabled={saving === product.id || !f.factoryCny || !f.volumeM3 || !f.qtyPerBox}
                       className="w-full py-3 rounded-xl text-white font-semibold disabled:opacity-50"
@@ -370,6 +390,7 @@ export default function PricingContent() {
                       {saving === product.id ? 'Đang gửi...' : '📤 Gửi báo giá'}
                     </button>
                   </div>
+                  </SafeBox>
                 )}
               </div>
             )
