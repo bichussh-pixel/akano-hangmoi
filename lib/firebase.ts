@@ -216,7 +216,9 @@ export interface Product {
 export interface DailyRate {
   key?: string
   fxRate: number
-  intlFreightPerKg: number
+  intlFreightPerKg: number        // legacy — giữ cho backward compat
+  intlFreightNguyenXe?: number    // Cước Nguyên Xe (VND/kg)
+  intlFreightGhepXe?: number      // Cước Ghép Xe (VND/kg)
   createdBy: string
   createdAt: number
 }

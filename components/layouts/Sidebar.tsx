@@ -20,8 +20,9 @@ const navItems: Record<string, { label: string; href: string; icon: string }[]> 
     { label: 'Chốt nhập', href: '/decide', icon: '🏁' },
   ],
   LEADER_PM: [
-    { label: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { label: 'Thiết lập check giá', href: '/setup', icon: '⚙️' },
+    { label: 'Dashboard',          href: '/dashboard', icon: '📊' },
+    { label: 'Thiết lập check giá', href: '/setup',    icon: '⚙️' },
+    { label: 'Check giá',           href: '/pricing',  icon: '💰' },
   ],
   BUYER: [
     { label: 'Dashboard', href: '/dashboard', icon: '📊' },

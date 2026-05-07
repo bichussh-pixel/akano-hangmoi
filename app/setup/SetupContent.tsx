@@ -29,7 +29,8 @@ interface Buyer {
 export default function SetupContent() {
   const [dailyRate, setDailyRate] = useState<DailyRate | null>(null)
   const [fxRate, setFxRate] = useState('')
-  const [intlFreightPerKg, setIntlFreightPerKg] = useState('')
+  const [freightNguyenXe, setFreightNguyenXe] = useState('')
+  const [freightGhepXe,   setFreightGhepXe]   = useState('')
   const [savingRate, setSavingRate] = useState(false)
 
   const [products, setProducts] = useState<Product[]>([])
@@ -56,7 +57,8 @@ export default function SetupContent() {
       if (rateData.rate) {
         setDailyRate(rateData.rate)
         setFxRate(String(rateData.rate.fxRate))
-        setIntlFreightPerKg(String(rateData.rate.intlFreightPerKg))
+        setFreightNguyenXe(String(rateData.rate.intlFreightNguyenXe ?? rateData.rate.intlFreightPerKg ?? ''))
+        setFreightGhepXe(String(rateData.rate.intlFreightGhepXe ?? ''))
       }
       setProducts(Array.isArray(productsData) ? productsData : (productsData.products || []))
       setBuyers(Array.isArray(buyersData) ? buyersData : (buyersData.buyers || []))
@@ -70,11 +72,17 @@ export default function SetupContent() {
       const res = await fetch('/api/daily-rates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fxRate: Number(fxRate), intlFreightPerKg: Number(intlFreightPerKg) }),
+        body: JSON.stringify({
+          fxRate:               Number(fxRate),
+          intlFreightNguyenXe:  Number(freightNguyenXe),
+          intlFreightGhepXe:    Number(freightGhepXe),
+        }),
       })
       const data = await res.json()
-      setDailyRate(data.rate)
-      showToast('Đã lưu tỷ giá hôm nay')
+      if (data.rate) setDailyRate(data.rate)  // cập nhật state ngay, không cần GET lại
+      showToast('✅ Đã lưu tỷ giá hôm nay')
+    } catch {
+      showToast('Lỗi khi lưu tỷ giá')
     } finally {
       setSavingRate(false)
     }
@@ -153,7 +161,7 @@ export default function SetupContent() {
           📈 Tỷ giá hôm nay
           {dailyRate && <span className="ml-2 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Đã lưu</span>}
         </h2>
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">Tỷ giá CNY → VND</label>
             <input
@@ -165,19 +173,29 @@ export default function SetupContent() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B7280] mb-1 block">Cước quốc tế (VND/kg)</label>
+            <label className="text-xs font-medium text-[#6B7280] mb-1 block">🚛 Cước Nguyên Xe (VND/kg)</label>
             <input
               type="number"
-              value={intlFreightPerKg}
-              onChange={e => setIntlFreightPerKg(e.target.value)}
-              placeholder="VD: 60000"
+              value={freightNguyenXe}
+              onChange={e => setFreightNguyenXe(e.target.value)}
+              placeholder="VD: 55000"
+              className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-[#6B7280] mb-1 block">📦 Cước Ghép Xe (VND/kg)</label>
+            <input
+              type="number"
+              value={freightGhepXe}
+              onChange={e => setFreightGhepXe(e.target.value)}
+              placeholder="VD: 85000"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
         </div>
         <button
           onClick={saveRate}
-          disabled={savingRate || !fxRate || !intlFreightPerKg}
+          disabled={savingRate || !fxRate}
           className="px-5 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
           style={{ backgroundColor: '#E05B28' }}
         >
