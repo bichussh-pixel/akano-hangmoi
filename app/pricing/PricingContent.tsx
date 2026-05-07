@@ -41,7 +41,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
   useEffect(() => {
     fetch('/api/pricing/products')
       .then(r => r.json())
-      .then(data => { setProducts(data); setLoading(false) })
+      .then(data => { setProducts(Array.isArray(data) ? data : (data.products || [])); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 

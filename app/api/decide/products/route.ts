@@ -15,5 +15,5 @@ export async function GET() {
     const buyers = ids.map(id => getUserById(id)).filter(Boolean).map(u => ({ id: u!.id, name: u!.name }))
     return { ...p, assignedBuyers: buyers }
   }))
-  return NextResponse.json({ products: withAssignments })
+  return NextResponse.json(withAssignments)
 }

@@ -11,5 +11,5 @@ export async function GET() {
   const assignedIds = await getProductsAssignedToUser(user.id)
   const all = await getProducts({ status: 'pricing' })
   const products = all.filter(p => assignedIds.includes(p.id!))
-  return NextResponse.json({ products })
+  return NextResponse.json(products)
 }

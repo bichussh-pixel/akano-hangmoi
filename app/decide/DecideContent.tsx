@@ -48,7 +48,7 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
   useEffect(() => {
     fetch('/api/decide/products')
       .then(r => r.json())
-      .then(data => { setProducts(data); setLoading(false) })
+      .then(data => { setProducts(Array.isArray(data) ? data : (data.products || [])); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 

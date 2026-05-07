@@ -9,7 +9,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const assignedIds = await getProductsAssignedToUser(user.id)
-  const all = await getProducts({ status: 'done' })
-  const products = all.filter(p => assignedIds.includes(p.id!))
-  return NextResponse.json({ products })
+  const [pricing, confirmed] = await Promise.all([
+    getProducts({ status: 'pricing' }),
+    getProducts({ status: 'done' }),
+  ])
+  const pending = pricing.filter(p => assignedIds.includes(p.id!))
+  const done    = confirmed.filter(p => assignedIds.includes(p.id!))
+  return NextResponse.json({ pending, done })
 }

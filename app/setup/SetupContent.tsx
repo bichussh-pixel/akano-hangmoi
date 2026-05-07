@@ -58,8 +58,8 @@ export default function SetupContent() {
         setFxRate(String(rateData.rate.fxRate))
         setIntlFreightPerKg(String(rateData.rate.intlFreightPerKg))
       }
-      setProducts(productsData)
-      setBuyers(buyersData)
+      setProducts(Array.isArray(productsData) ? productsData : (productsData.products || []))
+      setBuyers(Array.isArray(buyersData) ? buyersData : (buyersData.buyers || []))
       setLoading(false)
     })
   }, [])
