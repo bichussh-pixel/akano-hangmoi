@@ -6,23 +6,26 @@ import { NextResponse } from 'next/server'
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   const user = session?.user as any
-  if (!session || user?.role !== 'BUYER') {
+  if (!session || !['BUYER', 'LEADER_PM'].includes(user?.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { id } = await params
   const product = await getProduct(id)
   if (!product) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Verify this BUYER is assigned
-  const assignments = await getAssignments(id)
-  if (!assignments.includes(user.id)) {
-    return NextResponse.json({ error: 'Not assigned' }, { status: 403 })
+  // BUYER phải được phân công; LEADER_PM có thể check bất kỳ SP nào
+  if (user.role === 'BUYER') {
+    const assignments = await getAssignments(id)
+    if (!assignments.includes(user.id)) {
+      return NextResponse.json({ error: 'Not assigned' }, { status: 403 })
+    }
   }
 
   const body = await req.json()
   const {
     factoryCny, weightKg, volumeM3, domesticFreightCny, inspectionCny, qtyPerBox,
     supplierName, supplierContact, moq, leadTime, pricingNotes, videoUrl,
+    freightType,
   } = body
 
   // Fetch daily rates for calculation
@@ -35,7 +38,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (rates && factoryCny) {
     const result = calculateLandedCost(
       { factoryCny: +factoryCny, weightKg: +weightKg || 0, domesticFreightCny: +domesticFreightCny || 0, inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1 },
-      { fxRate: +rates.fxRate, intlFreightPerKg: +rates.intlFreightPerKg, exportTaxPct: +product.exportTaxPct! || 0, importTaxPct: +product.importTaxPct! || 0 }
+      {
+        fxRate: +rates.fxRate,
+        intlFreightPerKg: +(rates.intlFreightPerKg || 0),
+        intlFreightNguyenXe: rates.intlFreightNguyenXe,
+        intlFreightGhepXe: rates.intlFreightGhepXe,
+        exportTaxPct: +product.exportTaxPct! || 0,
+        importTaxPct: +product.importTaxPct! || 0,
+      },
+      freightType || 'nguyen_xe'
     )
     totalPerUnit = result.totalPerUnit
     totalPerBox = result.totalPerBox
@@ -50,7 +61,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     totalPerUnit, totalPerBox, pricingBreakdown,
     supplierName: supplierName || '', supplierContact: supplierContact || '',
     moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
-    videoUrl: videoUrl || '', pricedBy: user.id, pricedAt: Date.now(),
+    videoUrl: videoUrl || '', freightType: freightType || 'nguyen_xe',
+    pricedBy: user.id, pricedAt: Date.now(),
   })
 
   return NextResponse.json({ totalPerUnit, totalPerBox })

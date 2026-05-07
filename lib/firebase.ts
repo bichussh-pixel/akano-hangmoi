@@ -198,6 +198,7 @@ export interface Product {
   pricingNotes?: string
   photos?: string[]
   videoUrl?: string
+  freightType?: 'nguyen_xe' | 'ghep_xe' | 'default'
   pricedBy?: string
   pricedAt?: number
   // Step 5

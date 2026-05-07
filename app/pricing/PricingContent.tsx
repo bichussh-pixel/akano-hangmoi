@@ -4,13 +4,20 @@ import { useEffect, useState } from 'react'
 import { calculateLandedCost } from '@/lib/calc'
 import ChatBox from '@/components/ui/ChatBox'
 
+interface DailyRate {
+  fxRate: number
+  intlFreightPerKg: number
+  intlFreightNguyenXe?: number
+  intlFreightGhepXe?: number
+}
+
 interface Product {
   id: string
   name: string
   checkCode: string
   marketPrice: number
   growthRate?: number
-  dailyRate?: { fxRate: number; intlFreightPerKg: number }
+  dailyRate?: DailyRate
   exportTaxPct?: number
   importTaxPct?: number
 }
@@ -28,6 +35,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [forms, setForms] = useState<Record<string, any>>({})
+  const [freightTypes, setFreightTypes] = useState<Record<string, 'nguyen_xe' | 'ghep_xe'>>({})
   const [photos, setPhotos] = useState<Record<string, string[]>>({})
   const [uploading, setUploading] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
@@ -49,6 +57,10 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
     setForms(prev => ({ ...prev, [productId]: { ...(prev[productId] || {}), [field]: value } }))
   }
 
+  function getFreightType(productId: string): 'nguyen_xe' | 'ghep_xe' {
+    return freightTypes[productId] || 'nguyen_xe'
+  }
+
   function getCalc(productId: string, product: Product) {
     const f = forms[productId] || {}
     if (!f.factoryCny || !f.weightKg || !f.qtyPerBox || !product.dailyRate) return null
@@ -63,10 +75,13 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
         },
         {
           fxRate: Number(product.dailyRate.fxRate),
-          intlFreightPerKg: Number(product.dailyRate.intlFreightPerKg),
+          intlFreightPerKg: Number(product.dailyRate.intlFreightPerKg || 0),
+          intlFreightNguyenXe: product.dailyRate.intlFreightNguyenXe,
+          intlFreightGhepXe: product.dailyRate.intlFreightGhepXe,
           exportTaxPct: Number(product.exportTaxPct || 0),
           importTaxPct: Number(product.importTaxPct || 0),
-        }
+        },
+        getFreightType(productId)
       )
     } catch { return null }
   }
@@ -93,6 +108,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...f,
+          freightType: getFreightType(product.id),
           photos: photos[product.id] || [],
         }),
       })
@@ -141,8 +157,10 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
           {products.map(product => {
             const isOpen = expanded === product.id
             const f = forms[product.id] || {}
+            const fType = getFreightType(product.id)
             const calc = getCalc(product.id, product)
             const productPhotos = photos[product.id] || []
+            const dr = product.dailyRate
 
             return (
               <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
@@ -167,6 +185,48 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
 
                 {isOpen && (
                   <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4 space-y-5">
+                    {/* Daily rate info */}
+                    {dr && (
+                      <div className="bg-[#F9FAFB] rounded-lg px-4 py-3 flex flex-wrap gap-4 text-xs text-[#6B7280]">
+                        <span>💱 Tỷ giá: <strong className="text-[#111827]">{dr.fxRate?.toLocaleString('vi-VN')} VND/CNY</strong></span>
+                        {dr.intlFreightNguyenXe != null && (
+                          <span>🚛 Nguyên Xe: <strong className="text-[#111827]">{dr.intlFreightNguyenXe?.toLocaleString('vi-VN')}đ/kg</strong></span>
+                        )}
+                        {dr.intlFreightGhepXe != null && (
+                          <span>📦 Ghép Xe: <strong className="text-[#111827]">{dr.intlFreightGhepXe?.toLocaleString('vi-VN')}đ/kg</strong></span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Freight type selector */}
+                    {dr && (dr.intlFreightNguyenXe != null || dr.intlFreightGhepXe != null) && (
+                      <div>
+                        <label className="text-xs font-medium text-[#6B7280] mb-2 block">Loại vận chuyển quốc tế</label>
+                        <div className="flex gap-2">
+                          {[
+                            { value: 'nguyen_xe', label: '🚛 Nguyên Xe', rate: dr.intlFreightNguyenXe },
+                            { value: 'ghep_xe', label: '📦 Ghép Xe', rate: dr.intlFreightGhepXe },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => setFreightTypes(prev => ({ ...prev, [product.id]: opt.value as any }))}
+                              className="flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors"
+                              style={{
+                                backgroundColor: fType === opt.value ? '#E05B28' : '#F3F4F6',
+                                color: fType === opt.value ? 'white' : '#6B7280',
+                                borderColor: fType === opt.value ? '#E05B28' : '#E5E7EB',
+                              }}
+                            >
+                              {opt.label}
+                              {opt.rate != null && (
+                                <span className="ml-1 text-xs opacity-75">({opt.rate.toLocaleString('vi-VN')}đ/kg)</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Pricing inputs */}
                     <div>
                       <h4 className="text-sm font-semibold text-[#111827] mb-3">Thông tin giá</h4>
@@ -199,7 +259,12 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng VND</span><span>{fmt(calc.breakdown.factoryVND)}</span></div>
                           <div className="flex justify-between"><span className="text-[#6B7280]">Thuế xuất khẩu</span><span>{fmt(calc.breakdown.exportTaxAmt)}</span></div>
-                          <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt(calc.breakdown.intlFreightAmt)}</span></div>
+                          <div className="flex justify-between">
+                            <span className="text-[#6B7280]">
+                              Cước QT {fType === 'nguyen_xe' ? '(Nguyên Xe)' : '(Ghép Xe)'}
+                            </span>
+                            <span>{fmt(calc.breakdown.intlFreightAmt)}</span>
+                          </div>
                           <div className="flex justify-between"><span className="text-[#6B7280]">Thuế nhập khẩu</span><span>{fmt(calc.breakdown.importTaxAmt)}</span></div>
                           <div className="flex justify-between"><span className="text-[#6B7280]">Cước nội địa</span><span>{fmt(calc.breakdown.domesticVND)}</span></div>
                           <div className="flex justify-between"><span className="text-[#6B7280]">Phí kiểm định</span><span>{fmt(calc.breakdown.inspectionVND)}</span></div>

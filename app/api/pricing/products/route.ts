@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { getProducts, getProductsAssignedToUser, getAssignments } from '@/lib/firebase'
+import { getProducts, getProductsAssignedToUser, getDailyRate } from '@/lib/firebase'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -15,5 +15,17 @@ export async function GET() {
     const assignedIds = await getProductsAssignedToUser(user.id)
     products = all.filter(p => assignedIds.includes(p.id!))
   }
-  return NextResponse.json(products)
+
+  // Enrich each product with its daily rate (for live calc in client)
+  const rateCache: Record<string, any> = {}
+  const enriched = await Promise.all(products.map(async p => {
+    if (!p.dailyRateDate) return p
+    if (!rateCache[p.dailyRateDate]) {
+      const rate = await getDailyRate(new Date(p.dailyRateDate))
+      rateCache[p.dailyRateDate] = rate || null
+    }
+    return { ...p, dailyRate: rateCache[p.dailyRateDate] }
+  }))
+
+  return NextResponse.json(enriched)
 }

@@ -7,13 +7,31 @@ export interface PricingInputs {
 }
 export interface DailyRates {
   fxRate: number
-  intlFreightPerKg: number
+  intlFreightPerKg: number       // legacy
+  intlFreightNguyenXe?: number   // Cước Nguyên Xe
+  intlFreightGhepXe?: number     // Cước Ghép Xe
   exportTaxPct: number
   importTaxPct: number
 }
-export function calculateLandedCost(inputs: PricingInputs, rates: DailyRates) {
+export function calculateLandedCost(
+  inputs: PricingInputs,
+  rates: DailyRates,
+  freightType: 'nguyen_xe' | 'ghep_xe' | 'default' = 'default'
+) {
   const { factoryCny, weightKg, domesticFreightCny, inspectionCny, qtyPerBox } = inputs
-  const { fxRate, intlFreightPerKg, exportTaxPct, importTaxPct } = rates
+  const { fxRate, exportTaxPct, importTaxPct } = rates
+
+  // Pick freight rate based on selected type
+  let intlFreightPerKg = rates.intlFreightPerKg
+  if (freightType === 'nguyen_xe' && rates.intlFreightNguyenXe != null) {
+    intlFreightPerKg = rates.intlFreightNguyenXe
+  } else if (freightType === 'ghep_xe' && rates.intlFreightGhepXe != null) {
+    intlFreightPerKg = rates.intlFreightGhepXe
+  } else if (rates.intlFreightNguyenXe != null) {
+    // default: use Nguyên Xe if available
+    intlFreightPerKg = rates.intlFreightNguyenXe
+  }
+
   const factoryVND = factoryCny * fxRate
   const exportTaxAmt = factoryVND * exportTaxPct / 100
   const intlFreightAmt = intlFreightPerKg * weightKg
