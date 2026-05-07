@@ -1,0 +1,57 @@
+import { auth } from '@/lib/auth'
+import { getProduct, saveProduct, getDailyRate, getAssignments } from '@/lib/firebase'
+import { calculateLandedCost } from '@/lib/calc'
+import { NextResponse } from 'next/server'
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  const user = session?.user as any
+  if (!session || user?.role !== 'BUYER') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const { id } = await params
+  const product = await getProduct(id)
+  if (!product) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Verify this BUYER is assigned
+  const assignments = await getAssignments(id)
+  if (!assignments.includes(user.id)) {
+    return NextResponse.json({ error: 'Not assigned' }, { status: 403 })
+  }
+
+  const body = await req.json()
+  const {
+    factoryCny, weightKg, volumeM3, domesticFreightCny, inspectionCny, qtyPerBox,
+    supplierName, supplierContact, moq, leadTime, pricingNotes, videoUrl,
+  } = body
+
+  // Fetch daily rates for calculation
+  const dailyRateDate = product.dailyRateDate
+    ? new Date(product.dailyRateDate)
+    : new Date()
+  const rates = await getDailyRate(dailyRateDate)
+
+  let totalPerUnit = 0, totalPerBox = 0, pricingBreakdown = {}
+  if (rates && factoryCny) {
+    const result = calculateLandedCost(
+      { factoryCny: +factoryCny, weightKg: +weightKg || 0, domesticFreightCny: +domesticFreightCny || 0, inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1 },
+      { fxRate: +rates.fxRate, intlFreightPerKg: +rates.intlFreightPerKg, exportTaxPct: +product.exportTaxPct! || 0, importTaxPct: +product.importTaxPct! || 0 }
+    )
+    totalPerUnit = result.totalPerUnit
+    totalPerBox = result.totalPerBox
+    pricingBreakdown = result.breakdown
+  }
+
+  await saveProduct(id, {
+    status: 'pending_final',
+    factoryCny: +factoryCny || 0, weightKg: +weightKg || 0,
+    volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0,
+    inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1,
+    totalPerUnit, totalPerBox, pricingBreakdown,
+    supplierName: supplierName || '', supplierContact: supplierContact || '',
+    moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
+    videoUrl: videoUrl || '', pricedBy: user.id, pricedAt: Date.now(),
+  })
+
+  return NextResponse.json({ totalPerUnit, totalPerBox })
+}
