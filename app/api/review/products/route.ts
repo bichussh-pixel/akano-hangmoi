@@ -8,5 +8,5 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const products = await getProducts({ status: 'pending_review' })
-  return NextResponse.json({ products })
+  return NextResponse.json(products)
 }

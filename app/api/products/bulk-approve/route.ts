@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   if (!session || user?.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const { ids } = await req.json()
+  const { ids, specs, qtys } = await req.json()
   if (!Array.isArray(ids) || !ids.length) {
     return NextResponse.json({ error: 'No ids' }, { status: 400 })
   }
@@ -19,11 +19,25 @@ export async function POST(req: Request) {
     if (!product) continue
     // Atomic check code generation via Firebase transaction
     const checkCode = await generateCheckCode(now)
+    const extra: Record<string, unknown> = {}
+    if (specs?.[id]) {
+      if (specs[id].weight)     extra.weightKg    = specs[id].weight
+      if (specs[id].dimensions) extra.volumeM3    = specs[id].dimensions
+      if (specs[id].material)   extra.hsDescription = specs[id].material
+      if (specs[id].useCases)   extra.pricingNotes = specs[id].useCases
+      // Also store raw spec strings for display
+      extra.specWeight     = specs[id].weight || ''
+      extra.specDimensions = specs[id].dimensions || ''
+      extra.specMaterial   = specs[id].material || ''
+      extra.specUseCases   = specs[id].useCases || ''
+    }
+    if (qtys?.[id]) extra.importQty = parseInt(qtys[id]) || 0
     await saveProduct(id, {
       status: 'pending_setup',
       checkCode,
       approvedAt: Date.now(),
       approvedBy: user.id,
+      ...extra,
     })
     results.push({ id, checkCode })
   }
