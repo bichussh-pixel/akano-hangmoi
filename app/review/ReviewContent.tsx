@@ -147,6 +147,21 @@ export default function ReviewContent() {
     }
   }
 
+  // Reset all pending_review products (admin only, for re-importing)
+  const [resetting, setResetting] = useState(false)
+  async function handleReset() {
+    if (!confirm('Xóa toàn bộ sản phẩm đang chờ duyệt và import lại?')) return
+    setResetting(true)
+    try {
+      await fetch('/api/admin/reset-products', { method: 'DELETE' })
+      showToast('🗑️ Đã xóa sản phẩm cũ — hãy vào Import để thêm lại')
+      setProducts([])
+      setSelected(new Set())
+    } finally {
+      setResetting(false)
+    }
+  }
+
   // Excel upload → import to Firebase then reload
   async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -230,6 +245,13 @@ export default function ReviewContent() {
             style={{ backgroundColor: '#059669' }}
           >
             {excelLoading ? '⏳ Đang đọc...' : '📁 Thêm từ Excel'}
+          </button>
+          {/* Reset demo data */}
+          <button onClick={handleReset} disabled={resetting}
+            className="px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+            style={{ background: '#F3F4F6', color: '#9CA3AF' }}
+            title="Xóa sản phẩm đang chờ duyệt để import lại">
+            {resetting ? '...' : '🗑️ Reset'}
           </button>
           {/* Approve button */}
           {selected.size > 0 && (
