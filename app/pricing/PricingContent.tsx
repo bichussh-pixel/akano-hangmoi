@@ -63,12 +63,13 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
 
   function getCalc(productId: string, product: Product) {
     const f = forms[productId] || {}
-    if (!f.factoryCny || !f.weightKg || !f.qtyPerBox || !product.dailyRate) return null
+    if (!f.factoryCny || !f.volumeM3 || !f.qtyPerBox || !product.dailyRate) return null
     try {
       return calculateLandedCost(
         {
           factoryCny: Number(f.factoryCny),
-          weightKg: Number(f.weightKg),
+          weightKg: Number(f.weightKg || 0),
+          volumeM3: Number(f.volumeM3 || 0),
           domesticFreightCny: Number(f.domesticFreightCny || 0),
           inspectionCny: Number(f.inspectionCny || 0),
           qtyPerBox: Number(f.qtyPerBox),
@@ -190,10 +191,10 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                       <div className="bg-[#F9FAFB] rounded-lg px-4 py-3 flex flex-wrap gap-4 text-xs text-[#6B7280]">
                         <span>💱 Tỷ giá: <strong className="text-[#111827]">{dr.fxRate?.toLocaleString('vi-VN')} VND/CNY</strong></span>
                         {dr.intlFreightNguyenXe != null && (
-                          <span>🚛 Nguyên Xe: <strong className="text-[#111827]">{dr.intlFreightNguyenXe?.toLocaleString('vi-VN')}đ/kg</strong></span>
+                          <span>🚛 Nguyên Xe: <strong className="text-[#111827]">{dr.intlFreightNguyenXe?.toLocaleString('vi-VN')}đ/m³</strong></span>
                         )}
                         {dr.intlFreightGhepXe != null && (
-                          <span>📦 Ghép Xe: <strong className="text-[#111827]">{dr.intlFreightGhepXe?.toLocaleString('vi-VN')}đ/kg</strong></span>
+                          <span>📦 Ghép Xe: <strong className="text-[#111827]">{dr.intlFreightGhepXe?.toLocaleString('vi-VN')}đ/m³</strong></span>
                         )}
                       </div>
                     )}
@@ -219,7 +220,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                             >
                               {opt.label}
                               {opt.rate != null && (
-                                <span className="ml-1 text-xs opacity-75">({opt.rate.toLocaleString('vi-VN')}đ/kg)</span>
+                                <span className="ml-1 text-xs opacity-75">({opt.rate.toLocaleString('vi-VN')}đ/m³)</span>
                               )}
                             </button>
                           ))}
@@ -355,7 +356,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
 
                     <button
                       onClick={() => submitPricing(product)}
-                      disabled={saving === product.id || !f.factoryCny || !f.weightKg || !f.qtyPerBox}
+                      disabled={saving === product.id || !f.factoryCny || !f.volumeM3 || !f.qtyPerBox}
                       className="w-full py-3 rounded-xl text-white font-semibold disabled:opacity-50"
                       style={{ backgroundColor: '#E05B28' }}
                     >

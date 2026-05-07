@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let totalPerUnit = 0, totalPerBox = 0, pricingBreakdown = {}
   if (rates && factoryCny) {
     const result = calculateLandedCost(
-      { factoryCny: +factoryCny, weightKg: +weightKg || 0, domesticFreightCny: +domesticFreightCny || 0, inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1 },
+      { factoryCny: +factoryCny, weightKg: +weightKg || 0, volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0, inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1 },
       {
         fxRate: +rates.fxRate,
         intlFreightPerKg: +(rates.intlFreightPerKg || 0),

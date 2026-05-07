@@ -1,15 +1,16 @@
 export interface PricingInputs {
   factoryCny: number
   weightKg: number
+  volumeM3: number               // số khối — dùng để tính cước quốc tế
   domesticFreightCny: number
   inspectionCny: number
   qtyPerBox: number
 }
 export interface DailyRates {
   fxRate: number
-  intlFreightPerKg: number       // legacy
-  intlFreightNguyenXe?: number   // Cước Nguyên Xe
-  intlFreightGhepXe?: number     // Cước Ghép Xe
+  intlFreightPerKg: number       // legacy (không dùng nếu có giá VND/m³)
+  intlFreightNguyenXe?: number   // Cước Nguyên Xe (VND/m³)
+  intlFreightGhepXe?: number     // Cước Ghép Xe (VND/m³)
   exportTaxPct: number
   importTaxPct: number
 }
@@ -18,23 +19,22 @@ export function calculateLandedCost(
   rates: DailyRates,
   freightType: 'nguyen_xe' | 'ghep_xe' | 'default' = 'default'
 ) {
-  const { factoryCny, weightKg, domesticFreightCny, inspectionCny, qtyPerBox } = inputs
+  const { factoryCny, volumeM3, domesticFreightCny, inspectionCny, qtyPerBox } = inputs
   const { fxRate, exportTaxPct, importTaxPct } = rates
 
-  // Pick freight rate based on selected type
-  let intlFreightPerKg = rates.intlFreightPerKg
+  // Pick freight rate (VND/m³) based on selected type
+  let intlFreightPerM3 = rates.intlFreightPerKg  // legacy fallback
   if (freightType === 'nguyen_xe' && rates.intlFreightNguyenXe != null) {
-    intlFreightPerKg = rates.intlFreightNguyenXe
+    intlFreightPerM3 = rates.intlFreightNguyenXe
   } else if (freightType === 'ghep_xe' && rates.intlFreightGhepXe != null) {
-    intlFreightPerKg = rates.intlFreightGhepXe
+    intlFreightPerM3 = rates.intlFreightGhepXe
   } else if (rates.intlFreightNguyenXe != null) {
-    // default: use Nguyên Xe if available
-    intlFreightPerKg = rates.intlFreightNguyenXe
+    intlFreightPerM3 = rates.intlFreightNguyenXe
   }
 
   const factoryVND = factoryCny * fxRate
   const exportTaxAmt = factoryVND * exportTaxPct / 100
-  const intlFreightAmt = intlFreightPerKg * weightKg
+  const intlFreightAmt = intlFreightPerM3 * volumeM3   // tính theo m³
   const importTaxBase = factoryVND + exportTaxAmt + intlFreightAmt
   const importTaxAmt = importTaxBase * importTaxPct / 100
   const domesticVND = domesticFreightCny * fxRate

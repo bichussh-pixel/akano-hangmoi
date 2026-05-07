@@ -173,22 +173,22 @@ export default function SetupContent() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B7280] mb-1 block">🚛 Cước Nguyên Xe (VND/kg)</label>
+            <label className="text-xs font-medium text-[#6B7280] mb-1 block">🚛 Cước Nguyên Xe (VND/m³)</label>
             <input
               type="number"
               value={freightNguyenXe}
               onChange={e => setFreightNguyenXe(e.target.value)}
-              placeholder="VD: 55000"
+              placeholder="VD: 5600000"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-[#6B7280] mb-1 block">📦 Cước Ghép Xe (VND/kg)</label>
+            <label className="text-xs font-medium text-[#6B7280] mb-1 block">📦 Cước Ghép Xe (VND/m³)</label>
             <input
               type="number"
               value={freightGhepXe}
               onChange={e => setFreightGhepXe(e.target.value)}
-              placeholder="VD: 85000"
+              placeholder="VD: 8500000"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
