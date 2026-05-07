@@ -7,7 +7,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
   const messages = await getMessages(id)
-  return NextResponse.json({ messages })
+  return NextResponse.json(messages)
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

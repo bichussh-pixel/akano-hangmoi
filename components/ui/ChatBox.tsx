@@ -25,7 +25,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
       const res = await fetch(`/api/products/${productId}/messages`)
       if (res.ok) {
         const data = await res.json()
-        setMessages(data)
+        setMessages(Array.isArray(data) ? data : (data.messages || []))
       }
     } catch {}
   }
