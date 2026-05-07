@@ -11,6 +11,11 @@ function passesFilter(p: any): boolean {
   return inAllowed && !isBlocked && price >= 5000 && price <= 150000
 }
 
+// Composite score: ưu tiên DS cao + tăng trưởng cao
+function score(p: any) {
+  return (p.sales30d || 0) * (1 + (p.growth || 0) / 100)
+}
+
 export async function POST(req: Request) {
   const session = await auth()
   if (!session || (session.user as any)?.role !== 'ADMIN') {
@@ -18,10 +23,19 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json()
+  const page = body.page || 1
+  const pageSize = 20
 
   const apiKey = process.env.KALODATA_SECRET_KEY
   if (!apiKey) {
-    return NextResponse.json({ products: getMockProducts(body), total: 8, mock: true })
+    const all = getMockProducts()
+    const start = (page - 1) * pageSize
+    return NextResponse.json({
+      products: all.slice(start, start + pageSize),
+      total: all.length,
+      page,
+      mock: true,
+    })
   }
 
   try {
@@ -31,31 +45,78 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         region: 'VN', language: 'vi-VN', currency: 'VND',
         date_range: body.dateRange || 'last30Day',
-        sort: { field: 'revenue_growth_rate', type: 'DESC' },
-        page_number: body.page || 1,
+        sort: { field: 'sold_count', type: 'DESC' },
+        page_number: page,
+        page_size: pageSize,
       }),
     })
     const data = await res.json()
     const products = (data.data || []).filter(passesFilter)
-    return NextResponse.json({ products, total: products.length })
+    return NextResponse.json({ products, total: data.total || products.length, page })
   } catch {
-    return NextResponse.json({ products: getMockProducts(body), total: 8, mock: true })
+    const all = getMockProducts()
+    return NextResponse.json({ products: all.slice(0, pageSize), total: all.length, page, mock: true })
   }
 }
 
-function tiktok(q: string) { return `https://www.tiktok.com/search?q=${encodeURIComponent(q)}` }
-function kalo(q: string)   { return `https://www.kalodata.com/product?keyword=${encodeURIComponent(q)}&region=VN` }
-function img(seed: string) { return `https://picsum.photos/seed/${seed}/300/300` }
+// Ảnh sản phẩm — dùng Unsplash IDs đã kiểm tra (fallback 📦 nếu lỗi)
+const U = 'https://images.unsplash.com'
+const IMGS: Record<string, string> = {
+  storage:   `${U}/photo-1558618666-fcd25c85cd64?w=200&h=200&fit=crop`,
+  kitchen:   `${U}/photo-1556909114-f6e7ad7d3136?w=200&h=200&fit=crop`,
+  bottle:    `${U}/photo-1602143407151-7111542de6e8?w=200&h=200&fit=crop`,
+  phone:     `${U}/photo-1512941937669-90a1b58e7e9c?w=200&h=200&fit=crop`,
+  clean:     `${U}/photo-1563453392212-326f5e854473?w=200&h=200&fit=crop`,
+  bike:      `${U}/photo-1576435728678-68d0fbf94e91?w=200&h=200&fit=crop`,
+  health:    `${U}/photo-1584634731339-252c581abfc5?w=200&h=200&fit=crop`,
+  bathroom:  `${U}/photo-1552321554-5fefe8c9ef14?w=200&h=200&fit=crop`,
+  cable:     `${U}/photo-1586810724476-c294fb7ac01b?w=200&h=200&fit=crop`,
+  fan:       `${U}/photo-1558618047-3c8c76ca0063?w=200&h=200&fit=crop`,
+  food:      `${U}/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop`,
+  pet:       `${U}/photo-1512425439-2d0a24c84fca?w=200&h=200&fit=crop`,
+  tool:      `${U}/photo-1581093458791-9d00e3a5db0b?w=200&h=200&fit=crop`,
+  desk:      `${U}/photo-1484154218962-a197022b5858?w=200&h=200&fit=crop`,
+}
 
-function getMockProducts(_body: any) {
-  return [
-    { id:'k1', name:'Giá để giày 5 tầng gấp gọn đa năng',           imageUrl:img('shoe-rack'),   market_price:89000,  sales30d:45230,  growth:127.4, kaloUrl:kalo('giá để giày 5 tầng'),           shopUrl:tiktok('giá để giày 5 tầng gấp gọn'),         category:'Sắp xếp nhà', description:'Chất liệu: Thép sơn tĩnh điện. Kích thước: 60×30×120cm. Cân nặng: 3.2kg. Công dụng: Để giày gọn gàng.',     shopName:'HomeStyle VN', shopSales:'1.2M/tháng' },
-    { id:'k2', name:'Dây buộc đồ đa năng silicon reusable set 10 cái', imageUrl:img('silicon-ties'), market_price:15000, sales30d:125000, growth:315.2, kaloUrl:kalo('dây buộc silicon reusable'),        shopUrl:tiktok('dây buộc đồ silicon đa năng'),         category:'Tiện ích',    description:'Chất liệu: Silicon cao cấp. Kích thước: 30×1.5cm. Cân nặng: 30g. Công dụng: Buộc dây cáp, rau củ.',           shopName:'EcoLife Store', shopSales:'890K/tháng' },
-    { id:'k3', name:'Hộp đựng thực phẩm thuỷ tinh borosilicate nắp tre', imageUrl:img('glass-container'), market_price:65000, sales30d:38100, growth:89.7, kaloUrl:kalo('hộp thuỷ tinh borosilicate nắp tre'), shopUrl:tiktok('hộp thuỷ tinh borosilicate nắp tre'), category:'Gia dụng',    description:'Chất liệu: Thuỷ tinh borosilicate. Kích thước: 15×10×8cm. Cân nặng: 450g. Công dụng: Đựng thức ăn.',         shopName:'GreenKitchen', shopSales:'650K/tháng' },
-    { id:'k4', name:'Giá đỡ điện thoại xe máy silicon chống rung',    imageUrl:img('phone-holder'),  market_price:55000,  sales30d:67000,  growth:156.3, kaloUrl:kalo('giá đỡ điện thoại xe máy silicon'),  shopUrl:tiktok('giá đỡ điện thoại xe máy chống rung'), category:'Tiện ích',    description:'Chất liệu: Nhựa PC + Silicone. Kích thước: 10×7×4cm. Công dụng: Gắn điện thoại xe máy.',                   shopName:'MotoGear VN', shopSales:'2.1M/tháng' },
-    { id:'k5', name:'Chổi quét nhà silicon lông mịn gấp gọn 110cm',  imageUrl:img('broom'),         market_price:55000,  sales30d:31000,  growth:72.1,  kaloUrl:kalo('chổi silicon lông mịn'),              shopUrl:tiktok('chổi quét nhà silicon gấp gọn'),       category:'Gia dụng',    description:'Chất liệu: Silicon + Cán nhôm. Chiều dài: 110cm. Cân nặng: 400g. Công dụng: Quét nhà không tiếng ồn.',     shopName:'CleanHome VN', shopSales:'780K/tháng' },
-    { id:'k6', name:'Bộ vá xe đạp mini 16 món xách tay',              imageUrl:img('bike-repair'),   market_price:45000,  sales30d:22000,  growth:44.5,  kaloUrl:kalo('bộ vá xe đạp mini'),                  shopUrl:tiktok('bộ vá xe đạp mini 16 món'),           category:'Thể thao',    description:'Chất liệu: Kim loại cao cấp + Nhựa ABS. Kích thước: 12×8×3cm. Công dụng: Vá xe đạp tại chỗ.',             shopName:'BikeKit Store', shopSales:'340K/tháng' },
-    { id:'k7', name:'Hộp đựng khẩu trang chống bụi nắp flip',         imageUrl:img('mask-box'),      market_price:12000,  sales30d:89000,  growth:201.8, kaloUrl:kalo('hộp đựng khẩu trang nắp flip'),       shopUrl:tiktok('hộp đựng khẩu trang chống bụi'),      category:'Tiện ích',    description:'Chất liệu: Nhựa PP cao cấp. Kích thước: 20×10×8cm. Công dụng: Đựng khẩu trang.',                          shopName:'HealthBox VN', shopSales:'1.5M/tháng' },
-    { id:'k8', name:'Kệ treo tường nhà tắm không khoan 3 tầng',       imageUrl:img('bathroom-shelf'), market_price:95000, sales30d:28500,  growth:88.3,  kaloUrl:kalo('kệ treo tường nhà tắm không khoan'),  shopUrl:tiktok('kệ nhà tắm không khoan 3 tầng'),      category:'Sắp xếp nhà', description:'Chất liệu: Thép không gỉ 304. Kích thước: 40×12×50cm. Công dụng: Kệ đựng đồ nhà tắm.',                  shopName:'HomePro VN', shopSales:'920K/tháng' },
+// Link TikTok tìm kiếm sản phẩm (sẽ là link trực tiếp khi dùng Kalodata thật)
+function tiktok(q: string) {
+  return `https://www.tiktok.com/search?q=${encodeURIComponent(q)}&type=item`
+}
+// Link Kalodata tìm kiếm
+function kalo(q: string) {
+  return `https://kalodata.com/vn/product/search?keyword=${encodeURIComponent(q)}&region=VN`
+}
+
+function getMockProducts() {
+  const raw = [
+    { id:'k1',  name:'Dây buộc đồ đa năng silicon reusable set 10 cái',    imageUrl:IMGS.cable,    market_price:15000,  sales30d:125000, growth:315.2, sellerCount:892,  category:'Tiện ích',    description:'Chất liệu: Silicon cao cấp. Kích thước: 30×1.5cm. Cân nặng: 30g.',           shopName:'EcoLife Store' },
+    { id:'k2',  name:'Hộp đựng khẩu trang chống bụi nắp flip',             imageUrl:IMGS.health,   market_price:12000,  sales30d:89000,  growth:201.8, sellerCount:543,  category:'Tiện ích',    description:'Chất liệu: Nhựa PP cao cấp. Kích thước: 20×10×8cm.',                         shopName:'HealthBox VN' },
+    { id:'k3',  name:'Giá đỡ điện thoại xe máy silicon chống rung',         imageUrl:IMGS.phone,    market_price:55000,  sales30d:67000,  growth:156.3, sellerCount:312,  category:'Tiện ích',    description:'Chất liệu: Nhựa PC + Silicone. Kích thước: 10×7×4cm.',                       shopName:'MotoGear VN' },
+    { id:'k4',  name:'Giá để giày 5 tầng gấp gọn đa năng',                 imageUrl:IMGS.storage,  market_price:89000,  sales30d:45230,  growth:127.4, sellerCount:278,  category:'Sắp xếp nhà', description:'Chất liệu: Thép sơn tĩnh điện. Kích thước: 60×30×120cm. Cân nặng: 3.2kg.',  shopName:'HomeStyle VN' },
+    { id:'k5',  name:'Kệ treo tường nhà tắm không khoan 3 tầng',            imageUrl:IMGS.bathroom, market_price:95000,  sales30d:28500,  growth:88.3,  sellerCount:198,  category:'Sắp xếp nhà', description:'Chất liệu: Thép không gỉ 304. Kích thước: 40×12×50cm.',                      shopName:'HomePro VN' },
+    { id:'k6',  name:'Hộp đựng thực phẩm thuỷ tinh borosilicate nắp tre',  imageUrl:IMGS.kitchen,  market_price:65000,  sales30d:38100,  growth:89.7,  sellerCount:421,  category:'Gia dụng',    description:'Chất liệu: Thuỷ tinh borosilicate. Kích thước: 15×10×8cm. Cân nặng: 450g.',  shopName:'GreenKitchen' },
+    { id:'k7',  name:'Chổi quét nhà silicon lông mịn gấp gọn 110cm',       imageUrl:IMGS.clean,    market_price:55000,  sales30d:31000,  growth:72.1,  sellerCount:267,  category:'Gia dụng',    description:'Chất liệu: Silicon + Cán nhôm. Chiều dài: 110cm. Cân nặng: 400g.',            shopName:'CleanHome VN' },
+    { id:'k8',  name:'Bộ vá xe đạp mini 16 món xách tay',                  imageUrl:IMGS.bike,     market_price:45000,  sales30d:22000,  growth:44.5,  sellerCount:145,  category:'Thể thao',    description:'Chất liệu: Kim loại cao cấp + Nhựa ABS. Kích thước: 12×8×3cm.',              shopName:'BikeKit Store' },
+    { id:'k9',  name:'Bình nước giữ nhiệt inox 316 500ml nắp hút',         imageUrl:IMGS.bottle,   market_price:89000,  sales30d:52000,  growth:184.6, sellerCount:634,  category:'Gia dụng',    description:'Chất liệu: Inox 316 food-grade. Dung tích 500ml. Giữ lạnh 24h, nóng 12h.',   shopName:'ThermoVN Store' },
+    { id:'k10', name:'Quạt mini tích điện USB cầm tay 3 tốc độ',            imageUrl:IMGS.fan,      market_price:45000,  sales30d:78000,  growth:223.5, sellerCount:567,  category:'Gia dụng',    description:'Chất liệu: Nhựa ABS + Motor DC. Pin 2000mAh. Nhỏ gọn, tiện mang theo.',       shopName:'CoolFan VN' },
+    { id:'k11', name:'Hộp đựng cơm 3 ngăn inox giữ nhiệt có túi',          imageUrl:IMGS.food,     market_price:75000,  sales30d:41000,  growth:138.9, sellerCount:389,  category:'Gia dụng',    description:'Chất liệu: Inox 304 + PP. Dung tích: 1.2L. Giữ nóng 4 giờ.',                 shopName:'LunchBox VN' },
+    { id:'k12', name:'Móc dán tường không khoan chịu lực 5kg set 6 cái',    imageUrl:IMGS.bathroom, market_price:25000,  sales30d:96000,  growth:267.3, sellerCount:723,  category:'Sắp xếp nhà', description:'Chất liệu: Nhựa ABS + keo 3M. Kích thước: 5×3cm. Chịu lực: 5kg/móc.',       shopName:'StickHook VN' },
+    { id:'k13', name:'Cuộn dây quản lý cáp tự cuộn silicon 1.8m',           imageUrl:IMGS.cable,    market_price:18000,  sales30d:112000, growth:289.4, sellerCount:845,  category:'Tiện ích',    description:'Chất liệu: Silicon dẻo. Dài 1.8m co giãn. Quản lý gọn dây sạc, tai nghe.',   shopName:'CableOrg Store' },
+    { id:'k14', name:'Giá đỡ sách đa năng điều chỉnh chiều rộng',           imageUrl:IMGS.desk,     market_price:55000,  sales30d:33000,  growth:95.2,  sellerCount:234,  category:'Sắp xếp nhà', description:'Chất liệu: Thép sơn tĩnh điện. Điều chỉnh 15–35cm. Dùng cho sách, hồ sơ.',  shopName:'DeskPro VN' },
+    { id:'k15', name:'Lược chải lông thú cưng tự vệ sinh silicon',          imageUrl:IMGS.pet,      market_price:35000,  sales30d:58000,  growth:176.8, sellerCount:412,  category:'Tiện ích',    description:'Chất liệu: Nhựa ABS + Lông silicon mềm. Nút tự làm sạch lông thú.',          shopName:'PetCare VN' },
+    { id:'k16', name:'Hộp đựng trang sức gương 3 tầng xoay 360°',          imageUrl:IMGS.storage,  market_price:85000,  sales30d:27000,  growth:112.4, sellerCount:189,  category:'Sắp xếp nhà', description:'Chất liệu: Nhựa acrylic trong suốt + Kính. Kích thước: 15×15×25cm.',        shopName:'Jewelry Box VN' },
+    { id:'k17', name:'Túi đựng giày chống bụi không dệt set 5 cái',         imageUrl:IMGS.storage,  market_price:22000,  sales30d:71000,  growth:198.7, sellerCount:556,  category:'Sắp xếp nhà', description:'Chất liệu: Vải không dệt 80gsm. Kích thước: 35×50cm. Thoáng khí, chống bụi.', shopName:'StoreBag VN' },
+    { id:'k18', name:'Bộ dụng cụ làm bếp silicon chịu nhiệt 6 món',        imageUrl:IMGS.kitchen,  market_price:120000, sales30d:19500,  growth:67.3,  sellerCount:167,  category:'Gia dụng',    description:'Chất liệu: Silicon food-grade chịu nhiệt 230°C. Gồm: spatula, muỗng, kẹp...', shopName:'KitchenPro VN' },
+    { id:'k19', name:'Đèn ngủ LED cảm ứng sạc USB đổi màu',                imageUrl:IMGS.fan,      market_price:35000,  sales30d:63000,  growth:245.1, sellerCount:478,  category:'Tiện ích',    description:'Chất liệu: Nhựa ABS. 16 màu RGB. Pin 500mAh. Cảm ứng chạm bật/tắt.',         shopName:'LightGlow VN' },
+    { id:'k20', name:'Bộ dây chun tập thể dục resistance band 5 cấp',       imageUrl:IMGS.bike,     market_price:65000,  sales30d:44000,  growth:153.2, sellerCount:323,  category:'Thể thao',    description:'Chất liệu: Latex thiên nhiên. 5 mức lực: 5–25kg. Dài 200cm.',                shopName:'FitBand Store' },
   ]
+
+  // Thêm shopUrl + kaloUrl rồi sắp xếp: DS*tăng_trưởng giảm dần
+  return raw
+    .map(p => ({
+      ...p,
+      shopUrl: tiktok(p.name),
+      kaloUrl: kalo(p.name),
+    }))
+    .sort((a, b) => score(b) - score(a))
 }

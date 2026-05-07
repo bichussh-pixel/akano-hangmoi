@@ -42,6 +42,20 @@ function isUrl(s?: string): boolean {
   return !!s && (s.startsWith('http://') || s.startsWith('https://'))
 }
 
+// Shopee URLs từ data cũ là link giả — lấy TikTok search theo tên thay thế
+function getBestShopLink(p: any): string | null {
+  const u = p.shopUrl || ''
+  if (u && !u.includes('shopee.vn/shop/') && isUrl(u)) return u
+  if (p.name) return `https://www.tiktok.com/search?q=${encodeURIComponent(p.name)}&type=item`
+  return null
+}
+function getKaloLink(p: any): string | null {
+  const u = p.kaloUrl || ''
+  if (u && !u.match(/kalodata\.com\/product\/\d+$/) && isUrl(u)) return u
+  if (p.name) return `https://kalodata.com/vn/product/search?keyword=${encodeURIComponent(p.name)}&region=VN`
+  return null
+}
+
 function todayKey(): string {
   const d = new Date()
   const yy = String(d.getFullYear()).slice(2)
@@ -350,18 +364,30 @@ export default function ReviewContent() {
                         )}
                       </div>
 
+                      {/* Stats row */}
+                      {(p.sales30d > 0 || p.sellerCount > 0) && (
+                        <div className="flex flex-wrap gap-3 text-xs mb-1">
+                          {p.sales30d > 0 && (
+                            <span className="text-[#374151]">📦 <b>{(p.sales30d).toLocaleString('vi-VN')}</b> đơn/30 ngày</span>
+                          )}
+                          {p.sellerCount > 0 && (
+                            <span className="text-[#6B7280]">🏪 <b>{(p.sellerCount).toLocaleString('vi-VN')}</b> shop đang bán</span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Links row */}
                       <div className="flex flex-wrap gap-2 mt-1">
-                        {isUrl(p.shopUrl) && (
-                          <a href={p.shopUrl} target="_blank" rel="noreferrer"
+                        {getBestShopLink(p) && (
+                          <a href={getBestShopLink(p)!} target="_blank" rel="noreferrer"
                             onClick={e => e.stopPropagation()}
                             className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-white text-xs font-bold no-underline"
                             style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)', boxShadow: '0 2px 6px #EC489933' }}>
                             🏆 Shop bán chạy
                           </a>
                         )}
-                        {isUrl(p.kaloUrl) && (
-                          <a href={p.kaloUrl} target="_blank" rel="noreferrer"
+                        {getKaloLink(p) && (
+                          <a href={getKaloLink(p)!} target="_blank" rel="noreferrer"
                             onClick={e => e.stopPropagation()}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
                             style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>

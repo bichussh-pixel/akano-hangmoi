@@ -59,14 +59,16 @@ export default function ImportContent() {
   const [tab, setTab] = useState<TabType>('kalodata')
 
   // Kalodata API state
-  const [category,  setCategory]  = useState('Tất cả')
-  const [keyword,   setKeyword]   = useState('')
-  const [dateRange, setDateRange] = useState('last30Day')
-  const [sortBy,    setSortBy]    = useState('growth')
-  const [products,  setProducts]  = useState<any[]>([])
-  const [loading,   setLoading]   = useState(false)
-  const [loadStep,  setLoadStep]  = useState(0)
-  const [isMock,    setIsMock]    = useState(false)
+  const [category,   setCategory]  = useState('Tất cả')
+  const [keyword,    setKeyword]   = useState('')
+  const [dateRange,  setDateRange] = useState('last30Day')
+  const [sortBy,     setSortBy]    = useState('growth')
+  const [products,   setProducts]  = useState<any[]>([])
+  const [loading,    setLoading]   = useState(false)
+  const [loadStep,   setLoadStep]  = useState(0)
+  const [isMock,     setIsMock]    = useState(false)
+  const [page,       setPage]      = useState(1)
+  const [totalCount, setTotalCount]= useState(0)
 
   // Excel state
   const excelRef = useRef<HTMLInputElement>(null)
@@ -87,31 +89,33 @@ export default function ImportContent() {
   }
 
   // ── Kalodata API ──────────────────────────────────────────────────────────
-  async function handleFetch() {
+  async function fetchPage(p: number) {
     setLoading(true)
     setLoadStep(0)
-    setProducts([])
-    setSelected(new Set())
+    if (p === 1) { setProducts([]); setSelected(new Set()) }
     for (let i = 0; i < LOADING_STEPS.length - 1; i++) {
-      await new Promise(r => setTimeout(r, 500))
+      await new Promise(r => setTimeout(r, 400))
       setLoadStep(i + 1)
     }
     try {
       const res = await fetch('/api/kalodata/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateRange, sortBy, keyword }),
+        body: JSON.stringify({ dateRange, sortBy, keyword, page: p }),
       })
       const data = await res.json()
       let list = data.products || []
       if (category !== 'Tất cả') list = list.filter((p: any) => (p.category || '').toLowerCase().includes(category.toLowerCase()))
       if (keyword) list = list.filter((p: any) => (p.name || '').toLowerCase().includes(keyword.toLowerCase()))
       setProducts(list)
+      setTotalCount(data.total || list.length)
+      setPage(p)
       setIsMock(data.mock || false)
     } finally {
       setLoading(false)
     }
   }
+  function handleFetch() { fetchPage(1) }
 
   // ── Excel upload ──────────────────────────────────────────────────────────
   async function handleExcelFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -222,9 +226,20 @@ export default function ImportContent() {
           </div>
           <div className="text-xs text-[#6B7280] mb-2 line-clamp-2">{p.description}</div>
 
+          {/* Stats row */}
+          <div className="flex flex-wrap gap-3 text-xs mb-2">
+            <span className="text-[#374151] font-medium">
+              📦 <span className="font-bold text-[#111827]">{(p.sales30d || 0).toLocaleString('vi-VN')}</span> đơn/30 ngày
+            </span>
+            {(p.sellerCount || p.seller_count) > 0 && (
+              <span className="text-[#6B7280]">
+                🏪 <span className="font-semibold text-[#374151]">{(p.sellerCount || p.seller_count).toLocaleString('vi-VN')}</span> shop đang bán
+              </span>
+            )}
+          </div>
+
           {/* Tags & links */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[#6B7280]">🏪 {p.shopName || p.shop_name || 'N/A'}</span>
             <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
               {p.category}
             </span>
@@ -247,10 +262,9 @@ export default function ImportContent() {
           </div>
         </div>
 
-        <div className="text-right shrink-0 space-y-1">
+        <div className="text-right shrink-0 space-y-1 min-w-[90px]">
           <div className="font-bold text-[#111827] text-sm">{fmt(p.market_price || p.price || p.marketPrice)}</div>
-          <div className="text-xs text-[#6B7280]">{(p.sales30d || 0).toLocaleString()} đơn/tháng</div>
-          <div className="text-xs font-semibold px-2 py-0.5 rounded-full"
+          <div className="text-xs font-bold px-2 py-0.5 rounded-full"
             style={{ backgroundColor: '#DCFCE7', color: '#16A34A' }}>
             +{(p.growth || p.growthRate || 0).toFixed(1)}%
           </div>
@@ -372,6 +386,28 @@ export default function ImportContent() {
                     rank={rank} isTop3={top3Ids.has(p.id)} />
                 })}
               </div>
+
+              {/* Pagination */}
+              {totalCount > 20 && (
+                <div className="px-5 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
+                  <span className="text-xs text-[#6B7280]">
+                    Trang {page} · Hiển thị {products.length}/{totalCount} sản phẩm
+                  </span>
+                  <div className="flex gap-2">
+                    {page > 1 && (
+                      <button onClick={() => fetchPage(page - 1)} disabled={loading}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[#E5E7EB] hover:border-[#E05B28] hover:text-[#E05B28] disabled:opacity-50">
+                        ← Trang trước
+                      </button>
+                    )}
+                    <button onClick={() => fetchPage(page + 1)} disabled={loading || products.length < 20}
+                      className="px-3 py-1.5 text-xs rounded-lg text-white disabled:opacity-50"
+                      style={{ backgroundColor: '#E05B28' }}>
+                      Trang sau →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
