@@ -21,7 +21,9 @@ export async function POST(req: Request) {
       status: 'pending_review', createdAt: Date.now(),
       name: p.name || '', imageUrl: p.imageUrl || p.image_url || '',
       marketPrice: p.market_price || p.price || 0,
-      sales30d: p.sales30d || 0, growthRate: p.growth || p.growth_rate || 0,
+      sales30d: p.sales30d || 0,
+      revenue30d: p.revenue30d || 0,
+      growthRate: p.growth || p.growth_rate || 0,
       kaloUrl, shopUrl: p.shopUrl || p.shop_url || '',
       description: p.description || p.desc || '', category: p.category || p.cat || '',
     })

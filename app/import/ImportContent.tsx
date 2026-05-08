@@ -137,15 +137,16 @@ export default function ImportContent() {
       const parsed = rows.map((row, i) => ({
         id:          `EXCEL-${Date.now()}-${i}`,
         name:        getCol(row, 'name') || `SP ${i + 1}`,
-        img:         getCol(row, 'imageUrl'),       // actual image URL
+        img:         getCol(row, 'imageUrl'),
         imageUrl:    getCol(row, 'imageUrl'),
         category:    getCol(row, 'category') || 'Gia dụng',
         market_price:parseFloat(getCol(row, 'price').replace(/[^\d.]/g, '')) || 0,
         price:       parseFloat(getCol(row, 'price').replace(/[^\d.]/g, '')) || 0,
         sales30d:    parseInt(getCol(row, 'salesVolume')) || 0,
+        revenue30d:  parseFloat(getCol(row, 'revenue').replace(/[^\d.]/g, '')) || 0,
         growth:      parseFloat(getCol(row, 'growthRate')) || 0,
         kaloUrl:     getCol(row, 'kalodataLink'),
-        shopUrl:     getCol(row, 'tiktokLink'),   // best-selling shop = TikTok link from Kalodata
+        shopUrl:     getCol(row, 'tiktokLink'),
         description: '',
         shopName:    '',
         source:      'excel' as const,
