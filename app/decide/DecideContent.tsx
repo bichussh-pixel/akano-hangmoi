@@ -37,21 +37,16 @@ interface Product {
   imageUrl?: string
   kaloUrl?: string
   shopUrl?: string
+  description?: string
+  specWeight?: string
+  specDimensions?: string
+  specMaterial?: string
+  specUseCases?: string
+  importQty?: number
   // Kept for backward-compat (single pricing)
   totalPerUnit?: number
-  totalPerBox?: number
-  pricingBreakdown?: any
-  supplierName?: string
-  supplierContact?: string
-  moq?: string
-  leadTime?: string
-  pricingNotes?: string
-  photos?: string[]
-  videoUrl?: string
-  qtyPerBox?: number
   pricedBy?: string
   assignedBuyers: { id: string; name: string }[]
-  dailyRate?: { fxRate: number }
   pricings: PricingEntry[]
 }
 
@@ -194,35 +189,53 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                   <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4 space-y-5">
 
                     {/* Original product proposal */}
-                    <div className="flex gap-4 p-4 bg-[#F9FAFB] rounded-xl">
-                      {isUrl(product.imageUrl) && (
-                        <img src={product.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB] shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-[#111827] text-sm mb-1">{product.name}</div>
-                        <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
-                          {product.marketPrice > 0 && <span>💰 Giá TT: <strong className="text-[#111827]">{fmt(product.marketPrice)}</strong></span>}
-                          {(product.sales30d || 0) > 0 && <span>📦 <strong className="text-[#111827]">{(product.sales30d || 0).toLocaleString()}</strong> đơn/30 ngày</span>}
-                          {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}% tăng trưởng</span>}
-                          {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {getBestShopLink(product) && (
-                            <a href={getBestShopLink(product)!} target="_blank" rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
-                              style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
-                              🏆 Shop bán chạy
-                            </a>
-                          )}
-                          {getKaloLink(product) && (
-                            <a href={getKaloLink(product)!} target="_blank" rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
-                              style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
-                              🔗 Kalodata
-                            </a>
-                          )}
+                    <div className="p-4 bg-[#F9FAFB] rounded-xl space-y-3">
+                      <div className="flex gap-4">
+                        {isUrl(product.imageUrl) && (
+                          <img src={product.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB] shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-[#111827] text-sm mb-1">{product.name}</div>
+                          <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
+                            {product.marketPrice > 0 && <span>💰 Giá TT: <strong className="text-[#111827]">{fmt(product.marketPrice)}</strong></span>}
+                            {(product.sales30d || 0) > 0 && <span>📦 <strong className="text-[#111827]">{(product.sales30d || 0).toLocaleString()}</strong> đơn/30 ngày</span>}
+                            {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}% tăng trưởng</span>}
+                            {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
+                            {product.importQty && <span>📦 SL nhập: <strong className="text-[#111827]">{product.importQty}</strong> thùng</span>}
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {getBestShopLink(product) && (
+                              <a href={getBestShopLink(product)!} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
+                                style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
+                                🏆 Shop bán chạy
+                              </a>
+                            )}
+                            {getKaloLink(product) && (
+                              <a href={getKaloLink(product)!} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
+                                style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
+                                🔗 Kalodata
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      {/* Specs */}
+                      {(product.specWeight || product.specDimensions || product.specMaterial || product.specUseCases || product.description) && (
+                        <div className="border-t border-[#E5E7EB] pt-3">
+                          <div className="text-xs font-semibold text-[#6B7280] mb-2">📋 Thông số kỹ thuật</div>
+                          <div className="grid grid-cols-2 gap-1 text-xs text-[#374151]">
+                            {product.specWeight && <span>🏋️ KL: <strong>{product.specWeight}</strong></span>}
+                            {product.specDimensions && <span>📐 KT: <strong>{product.specDimensions}</strong></span>}
+                            {product.specMaterial && <span>🧵 CL: <strong>{product.specMaterial}</strong></span>}
+                            {product.specUseCases && <span className="col-span-2">✅ Công dụng: <strong>{product.specUseCases}</strong></span>}
+                            {product.description && !product.specUseCases && (
+                              <span className="col-span-2 text-[#6B7280]">{product.description}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Per-NV pricing tabs */}
@@ -250,53 +263,64 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
 
                         {activePricing && (
                           <div className="space-y-4">
+                            {/* NV name + date — always visible even for single NV */}
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: '#FFF3EE' }}>
+                              <span className="text-base">👤</span>
+                              <span className="font-semibold text-[#E05B28]">{activePricing.userName}</span>
+                              <span className="text-[#6B7280] text-xs ml-auto">
+                                Báo giá: {new Date(activePricing.pricedAt).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+
                             {/* Pricing breakdown */}
                             <div className="bg-[#F9FAFB] rounded-xl p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-semibold text-[#111827]">Chi tiết giá thành</h4>
-                                <span className="text-xs text-[#6B7280]">
-                                  NVMH: <strong>{activePricing.userName}</strong>
-                                  {' · '}{new Date(activePricing.pricedAt).toLocaleDateString('vi-VN')}
-                                </span>
-                              </div>
+                              <h4 className="text-sm font-semibold text-[#111827] mb-3">Chi tiết giá thành</h4>
                               <div className="space-y-1 text-xs">
-                                {bd.factoryVND && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt(bd.factoryVND)}</span></div>}
-                                {bd.exportTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế xuất khẩu</span><span>{fmt(bd.exportTaxAmt)}</span></div>}
-                                {bd.intlFreightAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt(bd.intlFreightAmt)}</span></div>}
-                                {bd.importTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế nhập khẩu</span><span>{fmt(bd.importTaxAmt)}</span></div>}
-                                {bd.domesticVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước nội địa</span><span>{fmt(bd.domesticVND)}</span></div>}
-                                {bd.inspectionVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Phí kiểm định</span><span>{fmt(bd.inspectionVND)}</span></div>}
+                                {bd.factoryVND != null && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt(bd.factoryVND)}</span></div>}
+                                {bd.exportTaxAmt != null && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế xuất khẩu</span><span>{fmt(bd.exportTaxAmt)}</span></div>}
+                                {bd.intlFreightAmt != null && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt(bd.intlFreightAmt)}</span></div>}
+                                {bd.importTaxAmt != null && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế nhập khẩu</span><span>{fmt(bd.importTaxAmt)}</span></div>}
+                                {bd.domesticVND != null && <div className="flex justify-between"><span className="text-[#6B7280]">Cước nội địa</span><span>{fmt(bd.domesticVND)}</span></div>}
+                                {bd.inspectionVND != null && <div className="flex justify-between"><span className="text-[#6B7280]">Phí kiểm định</span><span>{fmt(bd.inspectionVND)}</span></div>}
+                                {/* Fallback: show raw factory price if no breakdown */}
+                                {Object.keys(bd).length === 0 && activePricing.factoryCny > 0 && (
+                                  <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng (CNY)</span><span>{activePricing.factoryCny} CNY</span></div>
+                                )}
                               </div>
                               <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex justify-between font-bold text-sm">
                                 <span style={{ color: '#E05B28' }}>TỔNG/chiếc</span>
                                 <span style={{ color: '#E05B28' }}>{fmt(activePricing.totalPerUnit)}</span>
                               </div>
-                              {activePricing.totalPerBox && activePricing.qtyPerBox && (
+                              {(activePricing.totalPerBox || 0) > 0 && activePricing.qtyPerBox && (
                                 <div className="flex justify-between text-sm font-medium mt-1">
                                   <span className="text-[#6B7280]">TỔNG/thùng ({activePricing.qtyPerBox} cái)</span>
-                                  <span>{fmt(activePricing.totalPerBox)}</span>
+                                  <span>{fmt(activePricing.totalPerBox!)}</span>
                                 </div>
                               )}
                             </div>
 
                             {/* Supplier info */}
-                            {(activePricing.supplierName || activePricing.moq) && (
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                {activePricing.supplierName && <div><span className="text-[#6B7280]">NCC: </span>{activePricing.supplierName}</div>}
-                                {activePricing.supplierContact && <div><span className="text-[#6B7280]">Liên hệ: </span>{activePricing.supplierContact}</div>}
-                                {activePricing.moq && <div><span className="text-[#6B7280]">MOQ: </span>{activePricing.moq}</div>}
-                                {activePricing.leadTime && <div><span className="text-[#6B7280]">Lead time: </span>{activePricing.leadTime}</div>}
-                                {activePricing.pricingNotes && <div className="col-span-2"><span className="text-[#6B7280]">Ghi chú: </span>{activePricing.pricingNotes}</div>}
+                            {(activePricing.supplierName || activePricing.supplierContact || activePricing.moq || activePricing.leadTime || activePricing.pricingNotes) && (
+                              <div className="bg-[#F0FDF4] rounded-xl p-4">
+                                <h4 className="text-sm font-semibold text-[#111827] mb-2">🏭 Thông tin xưởng</h4>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  {activePricing.supplierName && <div><span className="text-[#6B7280]">Tên NCC: </span><strong>{activePricing.supplierName}</strong></div>}
+                                  {activePricing.supplierContact && <div><span className="text-[#6B7280]">Liên hệ: </span><strong>{activePricing.supplierContact}</strong></div>}
+                                  {activePricing.moq && <div><span className="text-[#6B7280]">MOQ: </span><strong>{activePricing.moq}</strong></div>}
+                                  {activePricing.leadTime && <div><span className="text-[#6B7280]">Lead time: </span><strong>{activePricing.leadTime}</strong></div>}
+                                  {activePricing.pricingNotes && <div className="col-span-2"><span className="text-[#6B7280]">Ghi chú: </span>{activePricing.pricingNotes}</div>}
+                                </div>
                               </div>
                             )}
 
                             {/* Photos & Videos */}
                             {activePricing.photos && activePricing.photos.length > 0 && (
                               <div>
-                                <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh/Video sản phẩm</h4>
+                                <h4 className="text-sm font-semibold text-[#111827] mb-2">🖼️ Ảnh/Video sản phẩm</h4>
                                 <div className="flex flex-wrap gap-2">
                                   {activePricing.photos.map((url: string, i: number) => {
                                     const isVideo = url.match(/\.(mp4|mov|webm|avi|mkv)(\?|$)/i)
+                                      || (url.startsWith('data:video/'))
                                     return isVideo ? (
                                       <video key={i} src={url} controls className="w-32 h-20 object-cover rounded-lg border border-[#E5E7EB] bg-black" />
                                     ) : (
@@ -308,25 +332,6 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                             )}
                           </div>
                         )}
-                      </div>
-                    )}
-
-                    {/* Fallback: no pricings in new system, use product fields */}
-                    {pricings.length === 0 && product.totalPerUnit && (
-                      <div className="bg-[#F9FAFB] rounded-xl p-4">
-                        <h4 className="text-sm font-semibold text-[#111827] mb-3">Chi tiết giá thành</h4>
-                        <div className="space-y-1 text-xs">
-                          {product.pricingBreakdown && Object.keys(product.pricingBreakdown).length > 0 && (
-                            <>
-                              {(product.pricingBreakdown as any).factoryVND && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt((product.pricingBreakdown as any).factoryVND)}</span></div>}
-                              {(product.pricingBreakdown as any).intlFreightAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt((product.pricingBreakdown as any).intlFreightAmt)}</span></div>}
-                            </>
-                          )}
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex justify-between font-bold text-sm">
-                          <span style={{ color: '#E05B28' }}>TỔNG/chiếc</span>
-                          <span style={{ color: '#E05B28' }}>{fmt(product.totalPerUnit)}</span>
-                        </div>
                       </div>
                     )}
 

@@ -171,7 +171,11 @@ export interface Product {
   shopUrl?: string
   description?: string
   category?: string
-  // Step 2
+  // Step 2 — specs (set during review approval)
+  specWeight?: string
+  specDimensions?: string
+  specMaterial?: string
+  specUseCases?: string
   checkCode?: string
   approvedAt?: number
   approvedBy?: string

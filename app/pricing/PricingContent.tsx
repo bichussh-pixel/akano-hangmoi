@@ -136,11 +136,18 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
     } catch { return null }
   }
 
+  const MAX_FILES = 10
+
   async function uploadMedia(productId: string, fileArr: File[]) {
     if (!fileArr.length) return
+    const currentCount = (photos[productId] || []).length
+    if (currentCount + fileArr.length > MAX_FILES) {
+      showToast(`Tối đa ${MAX_FILES} ảnh/video. Hiện có ${currentCount}, chỉ thêm được ${MAX_FILES - currentCount} file nữa.`)
+      fileArr = fileArr.slice(0, MAX_FILES - currentCount)
+      if (!fileArr.length) return
+    }
     setUploading(productId)
     try {
-      // Upload all files in parallel
       const results = await Promise.all(
         fileArr.map(async (file) => {
           const fd = new FormData()
@@ -148,23 +155,23 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
           try {
             const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
             const data = await res.json()
-            return (data.url as string) || null
+            if (!res.ok || data.error) return { url: null, error: data.error || 'Lỗi upload' }
+            return { url: data.url as string, error: null }
           } catch {
-            return null
+            return { url: null, error: 'Lỗi kết nối' }
           }
         })
       )
-      const uploadedUrls = results.filter((u): u is string => !!u)
+      const uploadedUrls = results.filter(r => r.url).map(r => r.url as string)
+      const errors = results.filter(r => r.error)
       if (uploadedUrls.length === 0) {
-        showToast('Lỗi tải ảnh — vui lòng thử lại')
+        showToast(errors[0]?.error || 'Lỗi tải file — vui lòng thử lại')
         return
       }
-      if (uploadedUrls.length < fileArr.length) {
-        showToast(`Tải được ${uploadedUrls.length}/${fileArr.length} ảnh`)
+      if (errors.length > 0) {
+        showToast(`Tải được ${uploadedUrls.length}/${fileArr.length} file. ${errors[0]?.error || ''}`)
       }
-      // Update local state once
       setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), ...uploadedUrls] }))
-      // Auto-save all new photos to product (parallel)
       await Promise.all(
         uploadedUrls.map(url =>
           fetch(`/api/products/${productId}/photos`, {
@@ -175,7 +182,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
         )
       )
     } catch {
-      showToast('Lỗi kết nối khi tải ảnh')
+      showToast('Lỗi kết nối khi tải file')
     } finally {
       setUploading(null)
     }
@@ -281,14 +288,20 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                           {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}%</span>}
                           {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
                         </div>
-                        {(product.specWeight || product.specDimensions || product.specMaterial || product.specUseCases) && (
-                          <div className="grid grid-cols-2 gap-1 text-xs text-[#6B7280] mb-2">
-                            {product.specWeight && <span>🏋️ {product.specWeight}</span>}
-                            {product.specDimensions && <span>📐 {product.specDimensions}</span>}
-                            {product.specMaterial && <span>🧵 {product.specMaterial}</span>}
-                            {product.specUseCases && <span>✅ {product.specUseCases}</span>}
-                          </div>
-                        )}
+                        <div className="grid grid-cols-2 gap-1 text-xs mb-2">
+                          <span className={product.specWeight ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                            🏋️ {product.specWeight || 'Chưa nhập cân nặng'}
+                          </span>
+                          <span className={product.specDimensions ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                            📐 {product.specDimensions || 'Chưa nhập kích thước'}
+                          </span>
+                          <span className={product.specMaterial ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                            🧵 {product.specMaterial || 'Chưa nhập chất liệu'}
+                          </span>
+                          {product.specUseCases && (
+                            <span className="text-[#374151] col-span-2">✅ {product.specUseCases}</span>
+                          )}
+                        </div>
                         <div className="flex gap-2 flex-wrap">
                           {getShopLink(product) && (
                             <a href={getShopLink(product)!} target="_blank" rel="noreferrer"
@@ -448,10 +461,14 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
 
                     {/* Photos & Videos */}
                     <div>
-                      <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh/Video sản phẩm</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-[#111827]">🖼️ Ảnh/Video sản phẩm</h4>
+                        <span className="text-xs text-[#9CA3AF]">{productPhotos.length}/{MAX_FILES} file</span>
+                      </div>
                       <div className="flex flex-wrap gap-2 mb-2">
                         {productPhotos.map((url, i) => {
                           const isVideo = url.match(/\.(mp4|mov|webm|avi|mkv)(\?|$)/i)
+                            || url.startsWith('data:video/')
                           return (
                             <div key={i} className="w-16 h-16 rounded-lg border border-[#E5E7EB] overflow-hidden relative bg-black">
                               {isVideo ? (
@@ -467,27 +484,44 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                             </div>
                           )
                         })}
-                        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5">
-                          <span className="text-xl leading-none">+</span>
-                          <span className="text-[10px] leading-tight text-center px-1">Ảnh/Video</span>
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            multiple
-                            className="hidden"
-                            disabled={uploading === product.id}
-                            onChange={e => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                // Convert to array BEFORE resetting value (FileList is live)
-                                const fileArr = Array.from(e.target.files)
-                                e.target.value = '' // reset so same files can be re-selected
-                                uploadMedia(product.id, fileArr)
-                              }
-                            }}
-                          />
-                        </label>
+                        {productPhotos.length < MAX_FILES && (
+                          <div className="flex gap-1">
+                            {/* Photo button */}
+                            <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5"
+                              title="Thêm ảnh">
+                              <span className="text-lg leading-none">🖼</span>
+                              <span className="text-[9px]">Ảnh</span>
+                              <input type="file" accept="image/*" multiple className="hidden"
+                                disabled={uploading === product.id}
+                                onChange={e => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    const fileArr = Array.from(e.target.files)
+                                    e.target.value = ''
+                                    uploadMedia(product.id, fileArr)
+                                  }
+                                }} />
+                            </label>
+                            {/* Video button */}
+                            <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5"
+                              title="Thêm video (tối đa 5MB)">
+                              <span className="text-lg leading-none">🎥</span>
+                              <span className="text-[9px]">Video</span>
+                              <input type="file" accept="video/*" multiple className="hidden"
+                                disabled={uploading === product.id}
+                                onChange={e => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    const fileArr = Array.from(e.target.files)
+                                    e.target.value = ''
+                                    uploadMedia(product.id, fileArr)
+                                  }
+                                }} />
+                            </label>
+                          </div>
+                        )}
                       </div>
-                      {uploading === product.id && <p className="text-xs text-[#6B7280]">Đang tải lên...</p>}
+                      {uploading === product.id && (
+                        <p className="text-xs text-[#E05B28] animate-pulse">⏳ Đang tải lên...</p>
+                      )}
                     </div>
 
                     {/* Chat */}
