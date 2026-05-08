@@ -57,6 +57,13 @@ function getKaloLink(p: any): string | null {
   return null
 }
 
+function calcImportRange(marketPrice: number) {
+  if (!marketPrice || marketPrice <= 0) return null
+  const min = Math.round((marketPrice * 0.45) * 0.83 / 1.08)
+  const max = Math.round((marketPrice * 0.60) * 0.83 / 1.08)
+  return { min, max }
+}
+
 function todayKey(): string {
   const d = new Date()
   const yy = String(d.getFullYear()).slice(2)
@@ -77,7 +84,12 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
     useCases:   p.specUseCases   || '',
   })
   const [qty,   setQty]   = useState(String(p.importQty || ''))
-  const [price, setPrice] = useState(String(p.estimatedImportPrice || ''))
+  const [price, setPrice] = useState(() => {
+    if (p.estimatedImportPrice) return String(p.estimatedImportPrice)
+    const range = calcImportRange(p.marketPrice)
+    if (!range) return ''
+    return String(Math.round((range.min + range.max) / 2))
+  })
   const [photos, setPhotos] = useState<string[]>(p.photos || (p.imageUrl ? [p.imageUrl] : []))
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
@@ -104,16 +116,28 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
     <div className="mt-3 p-4 rounded-xl border border-blue-200 bg-[#EFF6FF]">
       {toast && <div className="text-xs text-red-500 mb-2">{toast}</div>}
 
-      <div className="flex gap-4 mb-3">
-        <div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-3">
+        <div className="flex-1">
           <label className="text-xs text-[#6B7280] font-semibold mb-1 block">📦 SL nhập (thùng)</label>
           <input type="number" min="0" value={qty} onChange={e => setQty(e.target.value)}
-            placeholder="VD: 500" className={inpCls + ' w-28'} />
+            placeholder="VD: 500" className={inpCls} />
         </div>
-        <div>
+        <div className="flex-1">
           <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
           <input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)}
-            placeholder="VD: 45000" className={inpCls + ' w-36'} />
+            placeholder="VD: 45000" className={inpCls} />
+          {(() => {
+            const range = calcImportRange(p.marketPrice)
+            if (!range) return null
+            return (
+              <div className="mt-1 text-[10px] text-[#6B7280] leading-tight">
+                Tham chiếu: <span className="font-semibold text-[#D97706]">{fmtNum(range.min)}đ</span>
+                {' — '}
+                <span className="font-semibold text-[#D97706]">{fmtNum(range.max)}đ</span>
+                <span className="text-[#9CA3AF] ml-1">(45–60% giá TT × 0.83/1.08)</span>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -195,11 +219,13 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
 export default function ReviewContent() {
   const [products, setProducts]     = useState<any[]>([])
   const [reviewed, setReviewed]     = useState<any[]>([])
+  const [rejected, setRejected]     = useState<any[]>([])
   const [tab, setTab]               = useState<'pending'|'reviewed'>('pending')
   const [loading, setLoading]       = useState(true)
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [filter, setFilter]         = useState('Tất cả')
   const [approving, setApproving]   = useState(false)
+  const [bulkRejecting, setBulkRejecting] = useState(false)
   const [toast, setToast]           = useState('')
 
   // Per-product inputs
@@ -217,7 +243,7 @@ export default function ReviewContent() {
   const excelRef = useRef<HTMLInputElement>(null)
   const [excelLoading, setExcelLoading] = useState(false)
 
-  // Rejecting
+  // Per-product rejecting
   const [rejectingId, setRejectingId] = useState<string | null>(null)
 
   function showToast(msg: string) {
@@ -234,9 +260,12 @@ export default function ReviewContent() {
         if (Array.isArray(data)) {
           setProducts(data)
           setReviewed([])
+          setRejected([])
         } else {
           setProducts(data.pending || [])
-          setReviewed(data.reviewed || [])
+          const allReviewed: any[] = data.reviewed || []
+          setRejected(allReviewed.filter((p: any) => p.status === 'rejected'))
+          setReviewed(allReviewed.filter((p: any) => p.status !== 'rejected'))
         }
       }
     } finally {
@@ -253,8 +282,22 @@ export default function ReviewContent() {
   function toggleSelect(id: string) {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+        // Auto-set estimated price from formula if not already set
+        const product = products.find(p => p.id === id)
+        if (product?.marketPrice) {
+          setEstimatedPrices(ep => {
+            if (ep[id]) return ep
+            const range = calcImportRange(product.marketPrice)
+            if (!range) return ep
+            const mid = Math.round((range.min + range.max) / 2)
+            return { ...ep, [id]: String(mid) }
+          })
+        }
+      }
       return next
     })
   }
@@ -307,8 +350,27 @@ export default function ReviewContent() {
     }
   }
 
+  async function handleBulkReject() {
+    if (selected.size === 0) return
+    setBulkRejecting(true)
+    try {
+      const res = await fetch('/api/products/bulk-reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selected], reason: 'Không duyệt' }),
+      })
+      const data = await res.json()
+      showToast(`❌ Đã từ chối ${data.rejected || selected.size} sản phẩm`)
+      setSelected(new Set())
+      await fetchProducts()
+    } catch {
+      showToast('Lỗi khi từ chối sản phẩm')
+    } finally {
+      setBulkRejecting(false)
+    }
+  }
+
   async function handleReject(id: string) {
-    if (!confirm('Xác nhận không duyệt sản phẩm này?')) return
     setRejectingId(id)
     try {
       const res = await fetch(`/api/review/products/${id}`, {
@@ -362,6 +424,7 @@ export default function ReviewContent() {
         category:    getCol(row, 'category') || 'Gia dụng',
         marketPrice: parsePrice(getCol(row, 'price')),
         sales30d:    parseInt(getCol(row, 'salesVolume')) || 0,
+        revenue30d:  parsePrice(getCol(row, 'revenue')),
         growthRate:  parseFloat(getCol(row, 'growthRate')) || 0,
         kaloUrl:     getCol(row, 'kalodataLink'),
         shopUrl:     getCol(row, 'tiktokLink'),
@@ -409,13 +472,11 @@ export default function ReviewContent() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#111827]">✅ Duyệt hàng</h1>
-          <p className="text-[#6B7280] mt-1 text-sm">Chọn sản phẩm · nhập thông số · mã check tự sinh khi duyệt</p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
+      {/* Header — stacks on mobile */}
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-[#111827]">✅ Duyệt hàng</h1>
+        <p className="text-[#6B7280] mt-1 text-sm">Chọn sản phẩm · nhập thông số · mã check tự sinh khi duyệt</p>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
           <input ref={excelRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelUpload} />
           <button onClick={() => excelRef.current?.click()} disabled={excelLoading}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
@@ -428,13 +489,6 @@ export default function ReviewContent() {
             title="Xóa sản phẩm đang chờ duyệt để import lại">
             {resetting ? '...' : '🗑️ Reset'}
           </button>
-          {selected.size > 0 && (
-            <button onClick={handleApprove} disabled={approving}
-              className="px-5 py-2 rounded-xl text-white font-semibold text-sm disabled:opacity-60"
-              style={{ backgroundColor: '#E05B28' }}>
-              {approving ? 'Đang duyệt...' : `✅ Duyệt ${selected.size} SP →`}
-            </button>
-          )}
         </div>
       </div>
 
@@ -466,7 +520,6 @@ export default function ReviewContent() {
                 return (
                   <div key={p.id} className="p-4">
                     <div className="flex gap-4 items-start">
-                      {/* Image */}
                       <div className="w-14 h-14 rounded-lg bg-[#F3F4F6] shrink-0 overflow-hidden border border-[#E5E7EB] flex items-center justify-center text-xl">
                         {isUrl(p.imageUrl)
                           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
@@ -484,13 +537,13 @@ export default function ReviewContent() {
                         </div>
                         <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
                           {p.marketPrice > 0 && <span>💰 {fmt(p.marketPrice)}</span>}
-                          <span>📦 {p.sales30d > 0 ? `${p.sales30d.toLocaleString()} đơn/tháng` : '—'}</span>
+                          {p.sales30d > 0 && <span>📦 {p.sales30d.toLocaleString()} đơn/tháng</span>}
+                          {p.revenue30d > 0 && <span>💵 {fmt(p.revenue30d)}/tháng</span>}
                           {p.growthRate > 0
                             ? <span className="text-green-600 font-semibold">+{Number(p.growthRate).toFixed(1)}%</span>
                             : <span className="text-[#9CA3AF]">tăng trưởng —</span>
                           }
                         </div>
-                        {/* Spec summary if exists */}
                         {(p.specWeight || p.specDimensions || p.specMaterial || p.specUseCases || p.importQty || p.estimatedImportPrice) && (
                           <div className="flex flex-wrap gap-2 text-xs text-[#6B7280] mb-2">
                             {p.importQty > 0 && <span className="px-2 py-0.5 rounded bg-[#F3F4F6]">📦 {p.importQty} thùng</span>}
@@ -514,7 +567,6 @@ export default function ReviewContent() {
                               🔗 Kalodata
                             </a>
                           )}
-                          {/* Detail / Edit buttons */}
                           <button
                             onClick={() => { setExpandedReviewed(isExpanded ? null : p.id); setEditingReviewed(null) }}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
@@ -531,15 +583,15 @@ export default function ReviewContent() {
                       </div>
                     </div>
 
-                    {/* Expand detail panel */}
                     {isExpanded && (
-                      <div className="mt-3 ml-18 p-3 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] text-xs text-[#374151] space-y-1.5">
+                      <div className="mt-3 p-3 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] text-xs text-[#374151] space-y-1.5">
                         <div className="font-semibold text-[#111827] mb-2">📋 Thông tin chi tiết</div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                           <div><span className="text-[#6B7280]">Mã check:</span> <span className="font-mono font-bold" style={{ color: '#E05B28' }}>{p.checkCode || '—'}</span></div>
                           <div><span className="text-[#6B7280]">SL nhập:</span> {p.importQty > 0 ? `${p.importQty} thùng` : '—'}</div>
                           <div><span className="text-[#6B7280]">Giá nhập DK:</span> {p.estimatedImportPrice > 0 ? fmt(p.estimatedImportPrice) + '/chiếc' : '—'}</div>
-                          <div><span className="text-[#6B7280]">DS 30 ngày:</span> {p.sales30d > 0 ? p.sales30d.toLocaleString() + ' đơn' : '—'}</div>
+                          <div><span className="text-[#6B7280]">Số đơn 30 ngày:</span> {p.sales30d > 0 ? p.sales30d.toLocaleString() + ' đơn' : '—'}</div>
+                          {p.revenue30d > 0 && <div><span className="text-[#6B7280]">Doanh số 30 ngày:</span> {fmt(p.revenue30d)}</div>}
                           <div><span className="text-[#6B7280]">Tốc độ tăng:</span> {p.growthRate > 0 ? `+${Number(p.growthRate).toFixed(1)}%` : '—'}</div>
                           <div><span className="text-[#6B7280]">Danh mục:</span> {p.category || '—'}</div>
                           <div><span className="text-[#6B7280]">Cân nặng:</span> {p.specWeight || '—'}</div>
@@ -557,7 +609,6 @@ export default function ReviewContent() {
                       </div>
                     )}
 
-                    {/* Edit panel */}
                     {isEditing && (
                       <ReviewedEditPanel
                         p={p}
@@ -598,7 +649,7 @@ export default function ReviewContent() {
           {filtered.length > 0 && (
             <div className="bg-white rounded-xl border border-[#E5E7EB]">
               {/* Toolbar */}
-              <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center gap-3">
+              <div className="px-4 py-3 border-b border-[#E5E7EB] flex items-center gap-3 flex-wrap">
                 <button onClick={toggleAll} className="text-sm text-[#E05B28] hover:underline font-medium">
                   {selected.size === filtered.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
                 </button>
@@ -616,13 +667,13 @@ export default function ReviewContent() {
                   const spec  = specs[p.id] || { weight:'', dimensions:'', material:'', useCases:'' }
 
                   return (
-                    <div key={p.id} className={`p-5 transition-colors ${isSel ? 'bg-orange-50' : ''}`}>
+                    <div key={p.id} className={`p-4 transition-colors ${isSel ? 'bg-orange-50' : ''}`}>
                       {/* Main row */}
-                      <div className="flex gap-4">
+                      <div className="flex gap-3">
                         <input type="checkbox" checked={isSel} onChange={() => toggleSelect(p.id)}
                           className="mt-1 w-4 h-4 accent-[#E05B28] shrink-0" />
 
-                        <div className="w-16 h-16 rounded-xl bg-[#F3F4F6] flex items-center justify-center text-2xl shrink-0 overflow-hidden border border-[#E5E7EB]">
+                        <div className="w-14 h-14 rounded-xl bg-[#F3F4F6] flex items-center justify-center text-2xl shrink-0 overflow-hidden border border-[#E5E7EB]">
                           {isUrl(p.imageUrl) && !imgErr[p.id]
                             ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"
                                 onError={() => setImgErr(prev => ({ ...prev, [p.id]: true }))} />
@@ -642,12 +693,19 @@ export default function ReviewContent() {
                             )}
                           </div>
 
-                          {/* Stats — always visible */}
-                          <div className="flex flex-wrap gap-3 text-xs mb-2">
+                          {/* Stats */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-2">
                             <span className="text-[#6B7280]">💰 {fmt(p.marketPrice)}</span>
-                            <span className="text-[#374151] font-medium">
-                              📦 {p.sales30d > 0 ? <><b>{fmtNum(p.sales30d)}</b> đơn/30 ngày</> : <span className="text-[#9CA3AF]">DS 30 ngày —</span>}
-                            </span>
+                            {p.sales30d > 0 && (
+                              <span className="text-[#374151] font-medium">
+                                📦 <b>{fmtNum(p.sales30d)}</b> đơn/30 ngày
+                              </span>
+                            )}
+                            {p.revenue30d > 0 && (
+                              <span className="text-[#374151] font-medium">
+                                💵 <b>{fmt(p.revenue30d)}</b>/tháng
+                              </span>
+                            )}
                             {p.growthRate > 0
                               ? <span className="text-green-600 font-semibold">+{Number(p.growthRate).toFixed(1)}%</span>
                               : <span className="text-[#9CA3AF]">tăng trưởng —</span>
@@ -660,8 +718,8 @@ export default function ReviewContent() {
                           </div>
 
                           {p.sellerCount > 0 && (
-                            <div className="flex gap-3 text-xs mb-1">
-                              <span className="text-[#6B7280]">🏪 <b>{fmtNum(p.sellerCount)}</b> shop đang bán</span>
+                            <div className="text-xs mb-1 text-[#6B7280]">
+                              🏪 <b>{fmtNum(p.sellerCount)}</b> shop đang bán
                             </div>
                           )}
 
@@ -696,7 +754,7 @@ export default function ReviewContent() {
 
                       {/* Spec + qty panel — shown when selected */}
                       {isSel && (
-                        <div className="mt-4 ml-8 p-4 rounded-xl border border-orange-200 bg-[#FFFBEB]">
+                        <div className="mt-3 ml-7 p-4 rounded-xl border border-orange-200 bg-[#FFFBEB]">
                           {/* Check code preview */}
                           <div className="flex items-center gap-2 mb-3">
                             <span className="text-xs text-[#92400E]">🏷️ Mã check sẽ là:</span>
@@ -705,23 +763,35 @@ export default function ReviewContent() {
                             </span>
                           </div>
 
-                          {/* SL nhập + Giá dự kiến */}
-                          <div className="flex gap-4 mb-3">
-                            <div>
+                          {/* SL nhập + Giá dự kiến — stacked on mobile */}
+                          <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                            <div className="flex-1">
                               <label className="text-xs text-[#6B7280] font-semibold mb-1 block">📦 SL nhập (thùng)</label>
                               <input type="number" min="0" value={qtys[p.id] || ''}
                                 onChange={e => setQtys(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                placeholder="VD: 500" className={inpCls + ' w-28'} />
+                                placeholder="VD: 500" className={inpCls} />
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
                               <input type="number" min="0" value={estimatedPrices[p.id] || ''}
                                 onChange={e => setEstimatedPrices(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                placeholder="VD: 45000" className={inpCls + ' w-36'} />
+                                placeholder="VD: 45000" className={inpCls} />
+                              {(() => {
+                                const range = calcImportRange(p.marketPrice)
+                                if (!range) return null
+                                return (
+                                  <div className="mt-1 text-[10px] text-[#6B7280] leading-tight">
+                                    Tham chiếu: <span className="font-semibold text-[#D97706]">{fmtNum(range.min)}đ</span>
+                                    {' — '}
+                                    <span className="font-semibold text-[#D97706]">{fmtNum(range.max)}đ</span>
+                                    <span className="text-[#9CA3AF] ml-1">(45–60% giá TT × 0.83/1.08)</span>
+                                  </div>
+                                )
+                              })()}
                             </div>
                           </div>
 
-                          {/* Specs 2x2 */}
+                          {/* Specs */}
                           <div className="text-xs font-semibold text-[#D97706] mb-2">📋 Thông số kỹ thuật</div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div>
@@ -790,21 +860,54 @@ export default function ReviewContent() {
                 })}
               </div>
 
-              {/* Sticky approve bar */}
+              {/* Sticky bar — approve + reject when items selected */}
               {selected.size > 0 && (
-                <div className="sticky bottom-0 px-5 py-4 border-t border-orange-200 bg-[#FFFBEB] rounded-b-xl">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#6B7280]">
-                      Đã chọn <span className="font-bold text-[#E05B28]">{selected.size}</span> / {filtered.length} sản phẩm
+                <div className="sticky bottom-0 px-4 py-3 border-t border-orange-200 bg-[#FFFBEB] rounded-b-xl">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-sm text-[#6B7280] shrink-0">
+                      Đã chọn <span className="font-bold text-[#E05B28]">{selected.size}</span> / {filtered.length} SP
                     </span>
-                    <button onClick={handleApprove} disabled={approving}
-                      className="px-6 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60 transition-opacity"
-                      style={{ backgroundColor: '#E05B28', boxShadow: '0 4px 14px #E05B2833' }}>
-                      {approving ? '⏳ Đang duyệt...' : `✅ Chốt & gửi XNK →`}
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={handleBulkReject} disabled={bulkRejecting || approving}
+                        className="px-4 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60"
+                        style={{ backgroundColor: '#DC2626' }}>
+                        {bulkRejecting ? '⏳...' : `❌ Từ chối ${selected.size}`}
+                      </button>
+                      <button onClick={handleApprove} disabled={approving || bulkRejecting}
+                        className="px-5 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-60"
+                        style={{ backgroundColor: '#E05B28', boxShadow: '0 4px 14px #E05B2833' }}>
+                        {approving ? '⏳ Đang duyệt...' : `✅ Duyệt ${selected.size} SP →`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Rejected products section */}
+          {rejected.length > 0 && (
+            <div className="mt-4 bg-white rounded-xl border border-[#FECACA] overflow-hidden">
+              <details>
+                <summary className="cursor-pointer px-5 py-3 flex items-center gap-2 text-sm font-semibold text-[#DC2626] select-none">
+                  ❌ Đã từ chối ({rejected.length})
+                  <span className="text-[#9CA3AF] font-normal text-xs ml-1">— bấm để xem</span>
+                </summary>
+                <div className="divide-y divide-[#FEE2E2]">
+                  {rejected.map((p: any) => (
+                    <div key={p.id} className="px-5 py-3 flex items-center gap-3">
+                      {isUrl(p.imageUrl) && (
+                        <img src={p.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#E5E7EB]" onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-[#374151] truncate font-medium">{p.name}</div>
+                        <div className="text-xs text-[#6B7280]">{fmt(p.marketPrice)}</div>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-[#FEE2E2] text-[#DC2626] shrink-0 font-medium">Từ chối</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
         </>
