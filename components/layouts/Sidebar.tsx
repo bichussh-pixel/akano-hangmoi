@@ -46,6 +46,7 @@ interface SidebarProps {
     email?: string | null
     role?: string
   }
+  onClose?: () => void
 }
 
 const navItems: Record<string, { label: string; href: string; icon: string }[]> = {
@@ -74,7 +75,7 @@ const roleLabels: Record<string, string> = {
   BUYER: 'NVMH',
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const role = user.role || 'BUYER'
@@ -98,10 +99,21 @@ export default function Sidebar({ user }: SidebarProps) {
         >
           A
         </div>
-        <div>
+        <div className="flex-1">
           <div className="text-white font-semibold text-sm leading-tight">AKANO</div>
           <div className="text-gray-400 text-xs">Hàng Mới</div>
         </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="md:hidden text-gray-400 hover:text-white p-1 rounded"
+            aria-label="Đóng menu"
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Nav */}
@@ -112,6 +124,7 @@ export default function Sidebar({ user }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
               style={{
                 backgroundColor: isActive ? '#E05B28' : 'transparent',

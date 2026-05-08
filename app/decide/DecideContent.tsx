@@ -431,7 +431,7 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                                 ))}
                               </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label className="text-xs font-medium text-[#6B7280] mb-1 block">Số lượng nhập</label>
                                 <input type="number" value={d.importQty || ''} onChange={e => updateDecision(product.id, 'importQty', e.target.value)}
