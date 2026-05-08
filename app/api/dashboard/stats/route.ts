@@ -38,11 +38,18 @@ export async function GET() {
   // BUYER
   const assignedIds = await getProductsAssignedToUser(user.id)
   const assigned = all.filter(p => assignedIds.includes(p.id!))
+  const needPricing = assigned.filter(p => p.status === 'pricing')
+  const alreadyPriced = all.filter(p => p.pricedBy === user.id && ['pending_final','done','rejected'].includes(p.status))
+  const decided = alreadyPriced.filter(p => ['done','rejected'].includes(p.status))
   return NextResponse.json({
     role: 'BUYER',
+    need_pricing: needPricing.length,
+    priced: alreadyPriced.length,
+    decided: decided.length,
     total_assigned: assigned.length,
-    pricing: assigned.filter(p => p.status === 'pricing').length,
-    done: assigned.filter(p => p.status === 'done').length,
-    pending_kiot: assigned.filter(p => p.status === 'done' && !p.kiotCode).length,
+    // Lists for drill-down
+    needPricingList: needPricing.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice })),
+    pricedList: alreadyPriced.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit })),
+    decidedList: decided.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit })),
   })
 }

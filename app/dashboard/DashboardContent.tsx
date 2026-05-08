@@ -3,6 +3,108 @@
 import { useEffect, useState } from 'react'
 import ProductStatusBadge from '@/components/ui/ProductStatusBadge'
 
+function BuyerDashboard({ stats }: { stats: any }) {
+  const [openSection, setOpenSection] = useState<string | null>(null)
+
+  function fmt(n: number) {
+    return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+  }
+
+  const sections = [
+    {
+      key: 'need',
+      label: 'Cần báo giá',
+      value: stats.need_pricing || 0,
+      icon: '📋',
+      bg: '#DBEAFE', color: '#2563EB',
+      list: stats.needPricingList || [],
+      emptyMsg: 'Không có sản phẩm cần báo giá',
+      actionLabel: 'Đi check giá →',
+      actionHref: '/pricing',
+    },
+    {
+      key: 'priced',
+      label: 'Đã báo giá',
+      value: stats.priced || 0,
+      icon: '💰',
+      bg: '#FEF3C7', color: '#D97706',
+      list: stats.pricedList || [],
+      emptyMsg: 'Chưa báo giá sản phẩm nào',
+      actionLabel: undefined as string | undefined,
+      actionHref: undefined as string | undefined,
+    },
+    {
+      key: 'decided',
+      label: 'Đã chốt',
+      value: stats.decided || 0,
+      icon: '✅',
+      bg: '#DCFCE7', color: '#16A34A',
+      list: stats.decidedList || [],
+      emptyMsg: 'Chưa có sản phẩm nào được chốt',
+      actionLabel: undefined as string | undefined,
+      actionHref: undefined as string | undefined,
+    },
+  ]
+
+  const statusLabel: Record<string, string> = {
+    pricing: '🔵 Cần báo giá', pending_final: '⏳ Chờ chốt',
+    done: '✅ Đã nhập', rejected: '❌ Từ chối',
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {sections.map(sec => (
+          <button
+            key={sec.key}
+            onClick={() => setOpenSection(openSection === sec.key ? null : sec.key)}
+            className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4 text-left hover:shadow-md transition-shadow w-full"
+            style={{ borderColor: openSection === sec.key ? sec.color : '#E5E7EB' }}
+          >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0" style={{ backgroundColor: sec.bg }}>
+              {sec.icon}
+            </div>
+            <div className="flex-1">
+              <div className="text-2xl font-bold text-[#111827]">{sec.value}</div>
+              <div className="text-sm text-[#6B7280]">{sec.label}</div>
+            </div>
+            <span className="text-[#6B7280]">{openSection === sec.key ? '▲' : '▼'}</span>
+          </button>
+        ))}
+      </div>
+
+      {sections.map(sec => openSection === sec.key && (
+        <div key={sec.key} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden mb-4">
+          <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between" style={{ backgroundColor: sec.bg }}>
+            <h3 className="font-semibold text-sm" style={{ color: sec.color }}>{sec.icon} {sec.label} ({sec.value})</h3>
+            {sec.actionHref && (
+              <a href={sec.actionHref} className="text-xs font-semibold underline" style={{ color: sec.color }}>{sec.actionLabel}</a>
+            )}
+          </div>
+          {sec.list.length === 0 ? (
+            <div className="p-8 text-center text-[#6B7280] text-sm">{sec.emptyMsg}</div>
+          ) : (
+            <div className="divide-y divide-[#F3F4F6]">
+              {sec.list.map((p: any) => (
+                <div key={p.id} className="px-5 py-3 flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded shrink-0" style={{ background: '#FFF3EE', color: '#E05B28' }}>
+                    {p.checkCode || '—'}
+                  </span>
+                  <span className="flex-1 text-sm font-medium text-[#111827] truncate">{p.name}</span>
+                  {p.totalPerUnit && (
+                    <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>
+                  )}
+                  <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function StatCard({ label, value, icon, bg, color }: { label: string; value: number; icon: string; bg: string; color: string }) {
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
@@ -61,15 +163,15 @@ export default function DashboardContent() {
       {stats.role === 'ADMIN' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Chờ duyệt" value={stats.pendingReview} icon="👁️" bg="#DBEAFE" color="#2563EB" />
-            <StatCard label="Đang check giá" value={stats.pricing} icon="💰" bg="#FFF3EE" color="#E05B28" />
-            <StatCard label="Chờ chốt" value={stats.pendingFinal} icon="⏳" bg="#FEF3C7" color="#D97706" />
-            <StatCard label="Đã nhập" value={stats.done} icon="✅" bg="#DCFCE7" color="#16A34A" />
+            <StatCard label="Chờ duyệt" value={stats.pending_review || 0} icon="👁️" bg="#DBEAFE" color="#2563EB" />
+            <StatCard label="Đang check giá" value={stats.pricing || 0} icon="💰" bg="#FFF3EE" color="#E05B28" />
+            <StatCard label="Chờ chốt" value={stats.pending_final || 0} icon="⏳" bg="#FEF3C7" color="#D97706" />
+            <StatCard label="Đã nhập" value={stats.done || 0} icon="✅" bg="#DCFCE7" color="#16A34A" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <StatCard label="Tổng sản phẩm" value={stats.total} icon="📦" bg="#F3F4F6" color="#6B7280" />
-            <StatCard label="Chờ thiết lập" value={stats.pendingSetup} icon="⚙️" bg="#EDE9FE" color="#7C3AED" />
-            <StatCard label="Từ chối" value={stats.rejected} icon="❌" bg="#FEE2E2" color="#DC2626" />
+            <StatCard label="Chờ thiết lập" value={stats.pending_setup || 0} icon="⚙️" bg="#EDE9FE" color="#7C3AED" />
+            <StatCard label="Từ chối" value={stats.rejected || 0} icon="❌" bg="#FEE2E2" color="#DC2626" />
+            <StatCard label="Đang check giá + Chờ chốt" value={(stats.pricing || 0) + (stats.pending_final || 0)} icon="⏳" bg="#FFF3EE" color="#E05B28" />
           </div>
           {stats.recent && stats.recent.length > 0 && (
             <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
@@ -95,17 +197,13 @@ export default function DashboardContent() {
 
       {stats.role === 'LEADER_PM' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard label="Chờ thiết lập" value={stats.pendingSetup} icon="⚙️" bg="#EDE9FE" color="#7C3AED" />
-          <StatCard label="Phân công hôm nay" value={stats.assignedToday} icon="👤" bg="#DBEAFE" color="#2563EB" />
+          <StatCard label="Chờ thiết lập" value={stats.pending_setup || 0} icon="⚙️" bg="#EDE9FE" color="#7C3AED" />
+          <StatCard label="Đang check giá" value={stats.pricing || 0} icon="💰" bg="#FFF3EE" color="#E05B28" />
         </div>
       )}
 
       {stats.role === 'BUYER' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard label="Được phân công" value={stats.assigned} icon="📋" bg="#DBEAFE" color="#2563EB" />
-          <StatCard label="Đã báo giá" value={stats.pricingDone} icon="💰" bg="#FEF3C7" color="#D97706" />
-          <StatCard label="Đã nhập" value={stats.done} icon="✅" bg="#DCFCE7" color="#16A34A" />
-        </div>
+        <BuyerDashboard stats={stats} />
       )}
     </div>
   )

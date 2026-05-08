@@ -230,6 +230,8 @@ export interface Message {
   senderName: string
   content: string
   createdAt: number
+  mediaUrl?: string
+  mediaType?: 'image' | 'video'
 }
 
 export interface AppUser {
@@ -248,4 +250,36 @@ export function formatDateKey(date: Date): string {
 
 export function fmtVND(n: number): string {
   return new Intl.NumberFormat('vi-VN').format(Math.round(n)) + 'đ'
+}
+
+// ─── Pricings (per-NV pricing data) ──────────────────────────────────────────
+
+export interface ProductPricing {
+  factoryCny: number
+  weightKg?: number
+  volumeM3?: number
+  domesticFreightCny?: number
+  inspectionCny?: number
+  qtyPerBox?: number
+  totalPerUnit: number
+  totalPerBox?: number
+  pricingBreakdown?: object
+  supplierName?: string
+  supplierContact?: string
+  moq?: string
+  leadTime?: string
+  pricingNotes?: string
+  photos?: string[]
+  videoUrl?: string
+  freightType?: string
+  pricedAt: number
+  userName?: string
+}
+
+export async function savePricing(productId: string, userId: string, data: ProductPricing): Promise<void> {
+  await fbSet(`pricings/${productId}/${userId}`, data)
+}
+
+export async function getPricings(productId: string): Promise<Record<string, ProductPricing>> {
+  return (await fbGet<Record<string, ProductPricing>>(`pricings/${productId}`)) || {}
 }

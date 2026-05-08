@@ -71,6 +71,8 @@ type Spec = { weight: string; dimensions: string; material: string; useCases: st
 
 export default function ReviewContent() {
   const [products, setProducts]     = useState<any[]>([])
+  const [reviewed, setReviewed]     = useState<any[]>([])
+  const [tab, setTab]               = useState<'pending'|'reviewed'>('pending')
   const [loading, setLoading]       = useState(true)
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [filter, setFilter]         = useState('Tất cả')
@@ -97,7 +99,13 @@ export default function ReviewContent() {
       const res = await fetch('/api/review/products')
       if (res.ok) {
         const data = await res.json()
-        setProducts(Array.isArray(data) ? data : (data.products || []))
+        if (Array.isArray(data)) {
+          setProducts(data)
+          setReviewed([])
+        } else {
+          setProducts(data.pending || [])
+          setReviewed(data.reviewed || [])
+        }
       }
     } finally {
       setLoading(false)
@@ -284,6 +292,74 @@ export default function ReviewContent() {
         </div>
       </div>
 
+      {/* Tab buttons */}
+      <div className="flex gap-2 mb-5">
+        <button onClick={() => setTab('pending')} className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: tab==='pending'?'#E05B28':'#F3F4F6', color: tab==='pending'?'white':'#6B7280' }}>
+          Chờ duyệt ({products.length})
+        </button>
+        <button onClick={() => setTab('reviewed')} className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: tab==='reviewed'?'#E05B28':'#F3F4F6', color: tab==='reviewed'?'white':'#6B7280' }}>
+          Đã duyệt ({reviewed.length})
+        </button>
+      </div>
+
+      {tab === 'reviewed' && (
+        <div>
+          {reviewed.length === 0 ? (
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+              <div className="text-4xl mb-3">📋</div>
+              <p className="text-[#6B7280]">Chưa có sản phẩm nào đã duyệt</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-[#E5E7EB] divide-y divide-[#F3F4F6]">
+              {reviewed.map(p => (
+                <div key={p.id} className="p-4 flex gap-4 items-start">
+                  {/* Image */}
+                  <div className="w-14 h-14 rounded-lg bg-[#F3F4F6] shrink-0 overflow-hidden border border-[#E5E7EB] flex items-center justify-center text-xl">
+                    {isUrl(p.imageUrl)
+                      ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                      : '📦'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-semibold text-[#111827]">{p.name}</span>
+                      <ProductStatusBadge status={p.status} />
+                      {p.checkCode && (
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded" style={{ background: '#FFF3EE', color: '#E05B28' }}>
+                          {p.checkCode}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
+                      {p.marketPrice > 0 && <span>💰 {fmt(p.marketPrice)}</span>}
+                      {p.sales30d > 0 && <span>📦 {p.sales30d.toLocaleString()} đơn/tháng</span>}
+                      {p.growthRate > 0 && <span className="text-green-600 font-semibold">+{Number(p.growthRate).toFixed(1)}%</span>}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {getBestShopLink(p) && (
+                        <a href={getBestShopLink(p)!} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
+                          style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
+                          🏆 Shop bán chạy
+                        </a>
+                      )}
+                      {getKaloLink(p) && (
+                        <a href={getKaloLink(p)!} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
+                          style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
+                          🔗 Kalodata
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'pending' && (
+        <>
       {/* Category filter */}
       <div className="flex flex-wrap gap-2 mb-5">
         {CATEGORIES.map(cat => (
@@ -474,6 +550,8 @@ export default function ReviewContent() {
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   )

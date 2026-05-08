@@ -8,15 +8,25 @@ export async function GET() {
   if (!session || !['BUYER','LEADER_PM'].includes(user?.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const all = await getProducts({ status: 'pricing' })
-  // LEADER_PM thấy tất cả; BUYER chỉ thấy SP được phân công
-  let products = all
+
+  // Fetch all products once to avoid double reads
+  const allProducts = await getProducts()
+  const pricing = allProducts.filter(p => p.status === 'pricing')
+
+  let products = pricing
+  let pricedProducts: any[] = []
+
   if (user.role === 'BUYER') {
     const assignedIds = await getProductsAssignedToUser(user.id)
-    products = all.filter(p => assignedIds.includes(p.id!))
+    // Products still needing pricing
+    products = pricing.filter(p => assignedIds.includes(p.id!))
+    // Products this BUYER already priced (for chat access)
+    pricedProducts = allProducts.filter(p =>
+      ['pending_final', 'done', 'rejected'].includes(p.status) && p.pricedBy === user.id
+    )
   }
 
-  // Enrich each product with its daily rate (for live calc in client)
+  // Enrich pricing-status products with their daily rate (for live calc in client)
   const rateCache: Record<string, any> = {}
   const enriched = await Promise.all(products.map(async p => {
     if (!p.dailyRateDate) return p
@@ -27,5 +37,5 @@ export async function GET() {
     return { ...p, dailyRate: rateCache[p.dailyRateDate] }
   }))
 
-  return NextResponse.json(enriched)
+  return NextResponse.json({ products: enriched, pricedProducts })
 }

@@ -15,11 +15,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const user = session?.user as any
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
-  const { content } = await req.json()
-  if (!content?.trim()) return NextResponse.json({ error: 'Empty' }, { status: 400 })
-  const msgId = await addMessage(id, {
+  const body = await req.json()
+  const { content, mediaUrl, mediaType } = body
+  if (!content?.trim() && !mediaUrl) return NextResponse.json({ error: 'Empty' }, { status: 400 })
+  const msgData: any = {
     senderId: user.id, senderName: user.name || '',
-    content: content.trim(), createdAt: Date.now(),
-  })
+    content: (content || '').trim(), createdAt: Date.now(),
+  }
+  if (mediaUrl) { msgData.mediaUrl = mediaUrl; msgData.mediaType = mediaType || 'image' }
+  const msgId = await addMessage(id, msgData)
   return NextResponse.json({ id: msgId })
 }

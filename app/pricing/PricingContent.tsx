@@ -49,6 +49,7 @@ interface PricingContentProps {
 
 export default function PricingContent({ currentUser }: PricingContentProps) {
   const [products, setProducts] = useState<Product[]>([])
+  const [pricedProducts, setPricedProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [forms, setForms] = useState<Record<string, any>>({})
@@ -66,7 +67,16 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
   useEffect(() => {
     fetch('/api/pricing/products')
       .then(r => r.json())
-      .then(data => { setProducts(Array.isArray(data) ? data : (data.products || [])); setLoading(false) })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setProducts(data)
+          setPricedProducts([])
+        } else {
+          setProducts(data.products || [])
+          setPricedProducts(data.pricedProducts || [])
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -104,14 +114,19 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
     } catch { return null }
   }
 
-  async function uploadPhoto(productId: string, file: File) {
+  async function uploadMedia(productId: string, files: FileList) {
     setUploading(productId)
-    const fd = new FormData()
-    fd.append('image', file)
     try {
-      const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
-      const data = await res.json()
-      setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), data.url] }))
+      const fileArr = Array.from(files)
+      for (const file of fileArr) {
+        const fd = new FormData()
+        fd.append('image', file)
+        const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (data.url) {
+          setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), data.url] }))
+        }
+      }
     } finally {
       setUploading(null)
     }
@@ -343,32 +358,45 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                       </div>
                     </div>
 
-                    {/* Photos */}
+                    {/* Photos & Videos */}
                     <div>
-                      <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh sản phẩm (tối đa 5)</h4>
+                      <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh/Video sản phẩm</h4>
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {productPhotos.map((url, i) => (
-                          <div key={i} className="w-16 h-16 rounded-lg border border-[#E5E7EB] overflow-hidden">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ))}
-                        {productPhotos.length < 5 && (
-                          <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280]">
-                            <span className="text-xl">+</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              disabled={uploading === product.id}
-                              onChange={e => {
-                                const file = e.target.files?.[0]
-                                if (file) uploadPhoto(product.id, file)
-                              }}
-                            />
-                          </label>
-                        )}
+                        {productPhotos.map((url, i) => {
+                          const isVideo = url.match(/\.(mp4|mov|webm|avi|mkv)(\?|$)/i)
+                          return (
+                            <div key={i} className="w-16 h-16 rounded-lg border border-[#E5E7EB] overflow-hidden relative bg-black">
+                              {isVideo ? (
+                                <>
+                                  <video src={url} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-white text-lg">▶</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <img src={url} alt="" className="w-full h-full object-cover" />
+                              )}
+                            </div>
+                          )
+                        })}
+                        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5">
+                          <span className="text-xl leading-none">+</span>
+                          <span className="text-[10px] leading-tight text-center px-1">Ảnh/Video</span>
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            multiple
+                            className="hidden"
+                            disabled={uploading === product.id}
+                            onChange={e => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                uploadMedia(product.id, e.target.files)
+                              }
+                            }}
+                          />
+                        </label>
                       </div>
-                      {uploading === product.id && <p className="text-xs text-[#6B7280]">Đang tải ảnh...</p>}
+                      {uploading === product.id && <p className="text-xs text-[#6B7280]">Đang tải lên...</p>}
                     </div>
 
                     {/* Chat */}
@@ -391,6 +419,45 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {pricedProducts.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-[#111827] mb-4">📋 Đã báo giá ({pricedProducts.length})</h2>
+          <div className="space-y-3">
+            {pricedProducts.map(product => {
+              const isOpen = expanded === ('priced_' + product.id)
+              return (
+                <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#FAFAFA]"
+                    onClick={() => setExpanded(isOpen ? null : ('priced_' + product.id))}
+                  >
+                    <span className="px-2 py-0.5 text-xs font-mono rounded font-semibold" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
+                      {product.checkCode}
+                    </span>
+                    <span className="flex-1 text-sm font-semibold text-[#111827]">{product.name}</span>
+                    {product.totalPerUnit && (
+                      <span className="text-sm font-bold" style={{ color: '#E05B28' }}>{fmt(product.totalPerUnit)}/chiếc</span>
+                    )}
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: product.status === 'done' ? '#DCFCE7' : product.status === 'rejected' ? '#FEE2E2' : '#FEF3C7', color: product.status === 'done' ? '#16A34A' : product.status === 'rejected' ? '#DC2626' : '#D97706' }}>
+                      {product.status === 'done' ? '✅ Đã chốt' : product.status === 'rejected' ? '❌ Từ chối' : '⏳ Đang chờ chốt'}
+                    </span>
+                    <span className="text-[#6B7280] ml-2">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {isOpen && (
+                    <SafeBox>
+                      <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4">
+                        <ChatBox productId={product.id} currentUser={currentUser} />
+                      </div>
+                    </SafeBox>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

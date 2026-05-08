@@ -3,25 +3,56 @@
 import { useEffect, useState } from 'react'
 import ChatBox from '@/components/ui/ChatBox'
 
-interface Product {
-  id: string
-  name: string
-  checkCode: string
-  marketPrice: number
-  totalPerUnit?: number
+interface PricingEntry {
+  userId: string
+  userName: string
+  factoryCny: number
+  weightKg?: number
+  volumeM3?: number
+  domesticFreightCny?: number
+  inspectionCny?: number
+  qtyPerBox?: number
+  totalPerUnit: number
   totalPerBox?: number
   pricingBreakdown?: any
-  factoryCny?: number
-  weightKg?: number
-  qtyPerBox?: number
   supplierName?: string
   supplierContact?: string
   moq?: string
   leadTime?: string
   pricingNotes?: string
-  photos: string[]
-  assignments: { user: { id: string; name: string } }[]
+  photos?: string[]
+  videoUrl?: string
+  freightType?: string
+  pricedAt: number
+}
+
+interface Product {
+  id: string
+  name: string
+  checkCode: string
+  marketPrice: number
+  sales30d?: number
+  growthRate?: number
+  category?: string
+  imageUrl?: string
+  kaloUrl?: string
+  shopUrl?: string
+  // Kept for backward-compat (single pricing)
+  totalPerUnit?: number
+  totalPerBox?: number
+  pricingBreakdown?: any
+  supplierName?: string
+  supplierContact?: string
+  moq?: string
+  leadTime?: string
+  pricingNotes?: string
+  photos?: string[]
+  videoUrl?: string
+  qtyPerBox?: number
+  pricedBy?: string
+  assignedBuyers: { id: string; name: string }[]
   dailyRate?: { fxRate: number }
+  pricings: PricingEntry[]
 }
 
 interface DecideContentProps {
@@ -29,13 +60,29 @@ interface DecideContentProps {
 }
 
 function fmt(n: number) {
-  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+}
+
+function isUrl(s?: string): boolean {
+  return !!s && (s.startsWith('http://') || s.startsWith('https://'))
+}
+
+function getBestShopLink(p: any): string | null {
+  if (isUrl(p.shopUrl)) return p.shopUrl
+  if (p.name) return `https://www.tiktok.com/search?q=${encodeURIComponent(p.name)}&type=item`
+  return null
+}
+function getKaloLink(p: any): string | null {
+  if (isUrl(p.kaloUrl)) return p.kaloUrl
+  if (p.name) return `https://kalodata.com/vn/product/search?keyword=${encodeURIComponent(p.name)}&region=VN`
+  return null
 }
 
 export default function DecideContent({ currentUser }: DecideContentProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [selectedPricing, setSelectedPricing] = useState<Record<string, string>>({})  // productId → userId
   const [decisions, setDecisions] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [toast, setToast] = useState('')
@@ -89,7 +136,7 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-10">
       {toast && (
         <div className="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg bg-[#111827] text-white text-sm shadow-lg">
           {toast}
@@ -111,27 +158,33 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
           {products.map(product => {
             const isOpen = expanded === product.id
             const d = decisions[product.id] || {}
-            const bd = product.pricingBreakdown || {}
-            const totalImport = product.totalPerUnit && d.importQty
-              ? product.totalPerUnit * Number(d.importQty)
-              : null
+            // Determine which pricing to show
+            const pricings = product.pricings || []
+            const activePricingUserId = selectedPricing[product.id] || (pricings[0]?.userId || '')
+            const activePricing: PricingEntry | undefined = pricings.find(p => p.userId === activePricingUserId) || pricings[0]
+            const bd = activePricing?.pricingBreakdown || {}
+            const totalImport = activePricing?.totalPerUnit && d.importQty
+              ? activePricing.totalPerUnit * Number(d.importQty) : null
 
             return (
               <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+                {/* Header */}
                 <button
                   className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#FAFAFA]"
                   onClick={() => setExpanded(isOpen ? null : product.id)}
                 >
-                  <span
-                    className="px-2 py-0.5 text-xs font-mono rounded font-semibold"
-                    style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}
-                  >
+                  <span className="px-2 py-0.5 text-xs font-mono rounded font-semibold" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
                     {product.checkCode}
                   </span>
                   <span className="flex-1 text-sm font-semibold text-[#111827]">{product.name}</span>
-                  {product.totalPerUnit && (
+                  {activePricing?.totalPerUnit && (
                     <span className="text-sm font-bold" style={{ color: '#E05B28' }}>
-                      {fmt(product.totalPerUnit)}/chiếc
+                      {fmt(activePricing.totalPerUnit)}/chiếc
+                    </span>
+                  )}
+                  {pricings.length > 0 && (
+                    <span className="text-xs text-[#6B7280] bg-[#F3F4F6] px-2 py-0.5 rounded-full">
+                      {pricings.length} báo giá
                     </span>
                   )}
                   <span className="text-[#6B7280] ml-2">{isOpen ? '▲' : '▼'}</span>
@@ -139,49 +192,140 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
 
                 {isOpen && (
                   <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4 space-y-5">
-                    {/* Pricing breakdown */}
-                    {product.totalPerUnit && (
-                      <div className="bg-[#F9FAFB] rounded-xl p-4">
-                        <h4 className="text-sm font-semibold text-[#111827] mb-3">Chi tiết giá thành</h4>
-                        <div className="space-y-1 text-xs">
-                          {bd.factoryVND && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt(bd.factoryVND)}</span></div>}
-                          {bd.exportTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế xuất khẩu</span><span>{fmt(bd.exportTaxAmt)}</span></div>}
-                          {bd.intlFreightAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt(bd.intlFreightAmt)}</span></div>}
-                          {bd.importTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế nhập khẩu</span><span>{fmt(bd.importTaxAmt)}</span></div>}
-                          {bd.domesticVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước nội địa</span><span>{fmt(bd.domesticVND)}</span></div>}
-                          {bd.inspectionVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Phí kiểm định</span><span>{fmt(bd.inspectionVND)}</span></div>}
+
+                    {/* Original product proposal */}
+                    <div className="flex gap-4 p-4 bg-[#F9FAFB] rounded-xl">
+                      {isUrl(product.imageUrl) && (
+                        <img src={product.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB] shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-[#111827] text-sm mb-1">{product.name}</div>
+                        <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
+                          {product.marketPrice > 0 && <span>💰 Giá TT: <strong className="text-[#111827]">{fmt(product.marketPrice)}</strong></span>}
+                          {(product.sales30d || 0) > 0 && <span>📦 <strong className="text-[#111827]">{(product.sales30d || 0).toLocaleString()}</strong> đơn/30 ngày</span>}
+                          {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}% tăng trưởng</span>}
+                          {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
                         </div>
-                        <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex justify-between font-bold text-sm">
-                          <span style={{ color: '#E05B28' }}>TỔNG/chiếc</span>
-                          <span style={{ color: '#E05B28' }}>{fmt(product.totalPerUnit)}</span>
+                        <div className="flex gap-2 flex-wrap">
+                          {getBestShopLink(product) && (
+                            <a href={getBestShopLink(product)!} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
+                              style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
+                              🏆 Shop bán chạy
+                            </a>
+                          )}
+                          {getKaloLink(product) && (
+                            <a href={getKaloLink(product)!} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
+                              style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
+                              🔗 Kalodata
+                            </a>
+                          )}
                         </div>
-                        {product.totalPerBox && (
-                          <div className="flex justify-between text-sm font-medium mt-1">
-                            <span className="text-[#6B7280]">TỔNG/thùng ({product.qtyPerBox} cái)</span>
-                            <span>{fmt(product.totalPerBox)}</span>
+                      </div>
+                    </div>
+
+                    {/* Per-NV pricing tabs */}
+                    {pricings.length > 0 && (
+                      <div>
+                        {/* Tab buttons */}
+                        {pricings.length > 1 && (
+                          <div className="flex gap-2 mb-3">
+                            {pricings.map(pr => (
+                              <button
+                                key={pr.userId}
+                                onClick={() => setSelectedPricing(prev => ({ ...prev, [product.id]: pr.userId }))}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border"
+                                style={{
+                                  backgroundColor: activePricingUserId === pr.userId ? '#E05B28' : '#F3F4F6',
+                                  color: activePricingUserId === pr.userId ? 'white' : '#6B7280',
+                                  borderColor: activePricingUserId === pr.userId ? '#E05B28' : '#E5E7EB',
+                                }}
+                              >
+                                👤 {pr.userName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {activePricing && (
+                          <div className="space-y-4">
+                            {/* Pricing breakdown */}
+                            <div className="bg-[#F9FAFB] rounded-xl p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-sm font-semibold text-[#111827]">Chi tiết giá thành</h4>
+                                <span className="text-xs text-[#6B7280]">
+                                  NVMH: <strong>{activePricing.userName}</strong>
+                                  {' · '}{new Date(activePricing.pricedAt).toLocaleDateString('vi-VN')}
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-xs">
+                                {bd.factoryVND && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt(bd.factoryVND)}</span></div>}
+                                {bd.exportTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế xuất khẩu</span><span>{fmt(bd.exportTaxAmt)}</span></div>}
+                                {bd.intlFreightAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt(bd.intlFreightAmt)}</span></div>}
+                                {bd.importTaxAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Thuế nhập khẩu</span><span>{fmt(bd.importTaxAmt)}</span></div>}
+                                {bd.domesticVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước nội địa</span><span>{fmt(bd.domesticVND)}</span></div>}
+                                {bd.inspectionVND !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Phí kiểm định</span><span>{fmt(bd.inspectionVND)}</span></div>}
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex justify-between font-bold text-sm">
+                                <span style={{ color: '#E05B28' }}>TỔNG/chiếc</span>
+                                <span style={{ color: '#E05B28' }}>{fmt(activePricing.totalPerUnit)}</span>
+                              </div>
+                              {activePricing.totalPerBox && activePricing.qtyPerBox && (
+                                <div className="flex justify-between text-sm font-medium mt-1">
+                                  <span className="text-[#6B7280]">TỔNG/thùng ({activePricing.qtyPerBox} cái)</span>
+                                  <span>{fmt(activePricing.totalPerBox)}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Supplier info */}
+                            {(activePricing.supplierName || activePricing.moq) && (
+                              <div className="grid grid-cols-2 gap-3 text-xs">
+                                {activePricing.supplierName && <div><span className="text-[#6B7280]">NCC: </span>{activePricing.supplierName}</div>}
+                                {activePricing.supplierContact && <div><span className="text-[#6B7280]">Liên hệ: </span>{activePricing.supplierContact}</div>}
+                                {activePricing.moq && <div><span className="text-[#6B7280]">MOQ: </span>{activePricing.moq}</div>}
+                                {activePricing.leadTime && <div><span className="text-[#6B7280]">Lead time: </span>{activePricing.leadTime}</div>}
+                                {activePricing.pricingNotes && <div className="col-span-2"><span className="text-[#6B7280]">Ghi chú: </span>{activePricing.pricingNotes}</div>}
+                              </div>
+                            )}
+
+                            {/* Photos & Videos */}
+                            {activePricing.photos && activePricing.photos.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh/Video sản phẩm</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {activePricing.photos.map((url: string, i: number) => {
+                                    const isVideo = url.match(/\.(mp4|mov|webm|avi|mkv)(\?|$)/i)
+                                    return isVideo ? (
+                                      <video key={i} src={url} controls className="w-32 h-20 object-cover rounded-lg border border-[#E5E7EB] bg-black" />
+                                    ) : (
+                                      <img key={i} src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB]" />
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     )}
 
-                    {/* Supplier info */}
-                    {(product.supplierName || product.moq) && (
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        {product.supplierName && <div><span className="text-[#6B7280]">NCC: </span>{product.supplierName}</div>}
-                        {product.supplierContact && <div><span className="text-[#6B7280]">Liên hệ: </span>{product.supplierContact}</div>}
-                        {product.moq && <div><span className="text-[#6B7280]">MOQ: </span>{product.moq}</div>}
-                        {product.leadTime && <div><span className="text-[#6B7280]">Lead time: </span>{product.leadTime}</div>}
-                      </div>
-                    )}
-
-                    {/* Photos */}
-                    {product.photos && product.photos.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-[#111827] mb-2">Ảnh sản phẩm</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {product.photos.map((url, i) => (
-                            <img key={i} src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB]" />
-                          ))}
+                    {/* Fallback: no pricings in new system, use product fields */}
+                    {pricings.length === 0 && product.totalPerUnit && (
+                      <div className="bg-[#F9FAFB] rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-[#111827] mb-3">Chi tiết giá thành</h4>
+                        <div className="space-y-1 text-xs">
+                          {product.pricingBreakdown && Object.keys(product.pricingBreakdown).length > 0 && (
+                            <>
+                              {(product.pricingBreakdown as any).factoryVND && <div className="flex justify-between"><span className="text-[#6B7280]">Giá xuất xưởng</span><span>{fmt((product.pricingBreakdown as any).factoryVND)}</span></div>}
+                              {(product.pricingBreakdown as any).intlFreightAmt !== undefined && <div className="flex justify-between"><span className="text-[#6B7280]">Cước quốc tế</span><span>{fmt((product.pricingBreakdown as any).intlFreightAmt)}</span></div>}
+                            </>
+                          )}
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex justify-between font-bold text-sm">
+                          <span style={{ color: '#E05B28' }}>TỔNG/chiếc</span>
+                          <span style={{ color: '#E05B28' }}>{fmt(product.totalPerUnit)}</span>
                         </div>
                       </div>
                     )}
@@ -227,28 +371,22 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
                             >
                               <option value="">-- Chọn NVMH --</option>
-                              {product.assignments.map(a => (
-                                <option key={a.user.id} value={a.user.id}>{a.user.name}</option>
+                              {product.assignedBuyers.map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                              {product.pricings.map(pr => (
+                                <option key={pr.userId + '_pr'} value={pr.userId}>{pr.userName} (báo giá)</option>
                               ))}
                             </select>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="text-xs font-medium text-[#6B7280] mb-1 block">Số lượng nhập</label>
-                              <input
-                                type="number"
-                                value={d.importQty || ''}
-                                onChange={e => updateDecision(product.id, 'importQty', e.target.value)}
-                                className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
-                              />
+                              <input type="number" value={d.importQty || ''} onChange={e => updateDecision(product.id, 'importQty', e.target.value)} className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none" />
                             </div>
                             <div>
                               <label className="text-xs font-medium text-[#6B7280] mb-1 block">Kho nhập</label>
-                              <select
-                                value={d.importWarehouse || ''}
-                                onChange={e => updateDecision(product.id, 'importWarehouse', e.target.value)}
-                                className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
-                              >
+                              <select value={d.importWarehouse || ''} onChange={e => updateDecision(product.id, 'importWarehouse', e.target.value)} className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none">
                                 <option value="">-- Chọn kho --</option>
                                 <option value="HN">Hà Nội</option>
                                 <option value="SG">Sài Gòn</option>
@@ -267,12 +405,7 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                       {d.decision === 'reject' && (
                         <div>
                           <label className="text-xs font-medium text-[#6B7280] mb-1 block">Lý do từ chối</label>
-                          <textarea
-                            rows={2}
-                            value={d.rejectReason || ''}
-                            onChange={e => updateDecision(product.id, 'rejectReason', e.target.value)}
-                            className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
-                          />
+                          <textarea rows={2} value={d.rejectReason || ''} onChange={e => updateDecision(product.id, 'rejectReason', e.target.value)} className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none" />
                         </div>
                       )}
 
