@@ -57,6 +57,13 @@ function getKaloLink(p: any): string | null {
   return null
 }
 
+function calcImportRange(marketPrice: number) {
+  if (!marketPrice || marketPrice <= 0) return null
+  const min = Math.round((marketPrice * 0.45) * 0.83 / 1.08)
+  const max = Math.round((marketPrice * 0.60) * 0.83 / 1.08)
+  return { min, max }
+}
+
 function todayKey(): string {
   const d = new Date()
   const yy = String(d.getFullYear()).slice(2)
@@ -77,7 +84,12 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
     useCases:   p.specUseCases   || '',
   })
   const [qty,   setQty]   = useState(String(p.importQty || ''))
-  const [price, setPrice] = useState(String(p.estimatedImportPrice || ''))
+  const [price, setPrice] = useState(() => {
+    if (p.estimatedImportPrice) return String(p.estimatedImportPrice)
+    const range = calcImportRange(p.marketPrice)
+    if (!range) return ''
+    return String(Math.round((range.min + range.max) / 2))
+  })
   const [photos, setPhotos] = useState<string[]>(p.photos || (p.imageUrl ? [p.imageUrl] : []))
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
@@ -114,6 +126,18 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
           <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
           <input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)}
             placeholder="VD: 45000" className={inpCls} />
+          {(() => {
+            const range = calcImportRange(p.marketPrice)
+            if (!range) return null
+            return (
+              <div className="mt-1 text-[10px] text-[#6B7280] leading-tight">
+                Tham chiếu: <span className="font-semibold text-[#D97706]">{fmtNum(range.min)}đ</span>
+                {' — '}
+                <span className="font-semibold text-[#D97706]">{fmtNum(range.max)}đ</span>
+                <span className="text-[#9CA3AF] ml-1">(45–60% giá TT × 0.83/1.08)</span>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -258,8 +282,22 @@ export default function ReviewContent() {
   function toggleSelect(id: string) {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+        // Auto-set estimated price from formula if not already set
+        const product = products.find(p => p.id === id)
+        if (product?.marketPrice) {
+          setEstimatedPrices(ep => {
+            if (ep[id]) return ep
+            const range = calcImportRange(product.marketPrice)
+            if (!range) return ep
+            const mid = Math.round((range.min + range.max) / 2)
+            return { ...ep, [id]: String(mid) }
+          })
+        }
+      }
       return next
     })
   }
@@ -738,6 +776,18 @@ export default function ReviewContent() {
                               <input type="number" min="0" value={estimatedPrices[p.id] || ''}
                                 onChange={e => setEstimatedPrices(prev => ({ ...prev, [p.id]: e.target.value }))}
                                 placeholder="VD: 45000" className={inpCls} />
+                              {(() => {
+                                const range = calcImportRange(p.marketPrice)
+                                if (!range) return null
+                                return (
+                                  <div className="mt-1 text-[10px] text-[#6B7280] leading-tight">
+                                    Tham chiếu: <span className="font-semibold text-[#D97706]">{fmtNum(range.min)}đ</span>
+                                    {' — '}
+                                    <span className="font-semibold text-[#D97706]">{fmtNum(range.max)}đ</span>
+                                    <span className="text-[#9CA3AF] ml-1">(45–60% giá TT × 0.83/1.08)</span>
+                                  </div>
+                                )
+                              })()}
                             </div>
                           </div>
 
