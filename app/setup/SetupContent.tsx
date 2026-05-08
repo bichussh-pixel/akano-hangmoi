@@ -79,7 +79,7 @@ export default function SetupContent() {
         }),
       })
       const data = await res.json()
-      if (data.rate) setDailyRate(data.rate)  // cập nhật state ngay, không cần GET lại
+      if (data.rate) setDailyRate(data.rate)
       showToast('✅ Đã lưu tỷ giá hôm nay')
     } catch {
       showToast('Lỗi khi lưu tỷ giá')
@@ -161,7 +161,7 @@ export default function SetupContent() {
           📈 Tỷ giá hôm nay
           {dailyRate && <span className="ml-2 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Đã lưu</span>}
         </h2>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">Tỷ giá CNY → VND</label>
             <input

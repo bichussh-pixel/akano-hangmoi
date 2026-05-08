@@ -126,6 +126,9 @@ function BuyerDashboard({ stats }: { stats: any }) {
                       <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
                     </>
                   )}
+                  {sec.key === 'need' && (
+                    <a href={`/pricing/${p.id}`} className="text-xs font-semibold underline shrink-0" style={{ color: '#E05B28' }}>Báo giá →</a>
+                  )}
                 </div>
               ))}
             </div>
@@ -281,6 +284,129 @@ function AdminDashboard({ stats }: { stats: any }) {
   )
 }
 
+function LeaderPMDashboard({ stats }: { stats: any }) {
+  const [openSection, setOpenSection] = useState<string | null>(null)
+
+  const sections = [
+    { key: 'pricing', label: 'Đang check giá', icon: '💰', bg: '#FFF3EE', color: '#E05B28', value: stats.pricing || 0, list: stats.pricingList || [], href: '/pricing' },
+    { key: 'pending_final', label: 'Chờ Bích chốt', icon: '⏳', bg: '#FEF3C7', color: '#D97706', value: stats.pending_final || 0, list: stats.pendingFinalList || [], href: '/decide' },
+    { key: 'done', label: 'Đã nhập', icon: '✅', bg: '#DCFCE7', color: '#16A34A', value: stats.done || 0, list: stats.doneList || [], href: '/imports' },
+    { key: 'pending_setup', label: 'Chờ thiết lập', icon: '⚙️', bg: '#EDE9FE', color: '#7C3AED', value: stats.pending_setup || 0, list: stats.pendingSetupList || [], href: '/setup' },
+  ]
+
+  return (
+    <div>
+      {(stats.totalImportCost || 0) > 0 && (
+        <div className="rounded-xl p-4 mb-6 flex items-center gap-4 flex-wrap" style={{ backgroundColor: '#FFF3EE', border: '1px solid #FDBA74' }}>
+          <div>
+            <div className="text-xs text-[#6B7280]">Tổng tiền đã nhập</div>
+            <div className="text-xl font-bold" style={{ color: '#E05B28' }}>{fmt(stats.totalImportCost)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-[#6B7280]">Số mã đã nhập</div>
+            <div className="text-xl font-bold text-[#111827]">{stats.done || 0}</div>
+          </div>
+          <a href="/imports" className="text-sm font-semibold underline ml-auto shrink-0" style={{ color: '#E05B28' }}>Xem DS nhập →</a>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {sections.map(sec => (
+          <button key={sec.key}
+            onClick={() => setOpenSection(openSection === sec.key ? null : sec.key)}
+            className="bg-white rounded-xl border p-4 flex items-center gap-3 text-left hover:shadow-md transition-shadow w-full"
+            style={{ borderColor: openSection === sec.key ? sec.color : '#E5E7EB' }}
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: sec.bg }}>
+              {sec.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-2xl font-bold text-[#111827]">{sec.value}</div>
+              <div className="text-xs text-[#6B7280] truncate">{sec.label}</div>
+            </div>
+            <span className="text-[#6B7280] text-xs">{openSection === sec.key ? '▲' : '▼'}</span>
+          </button>
+        ))}
+      </div>
+
+      {sections.map(sec => openSection === sec.key && (
+        <div key={sec.key} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden mb-4">
+          <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between" style={{ backgroundColor: sec.bg }}>
+            <h3 className="font-semibold text-sm" style={{ color: sec.color }}>{sec.icon} {sec.label} ({sec.value})</h3>
+            {sec.href && <a href={sec.href} className="text-xs font-semibold underline" style={{ color: sec.color }}>Xem trang →</a>}
+          </div>
+          {sec.list.length === 0 ? (
+            <div className="p-8 text-center text-[#6B7280] text-sm">Không có sản phẩm</div>
+          ) : (
+            <div className="divide-y divide-[#F3F4F6]">
+              {sec.list.map((p: any) => (
+                <div key={p.id} className="px-5 py-3 flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded shrink-0" style={{ background: '#FFF3EE', color: '#E05B28' }}>
+                    {p.checkCode || '—'}
+                  </span>
+                  <span className="flex-1 text-sm text-[#111827] truncate">{p.name}</span>
+                  {sec.key === 'done' && p.assignedBuyerName && (
+                    <span className="text-xs text-[#6B7280] shrink-0">{p.assignedBuyerName}</span>
+                  )}
+                  {sec.key === 'done' && p.totalImportCost > 0 && (
+                    <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalImportCost)}</span>
+                  )}
+                  {sec.key === 'pricing' && p.pricedByName && (
+                    <span className="text-xs text-[#6B7280] shrink-0">{p.pricedByName}</span>
+                  )}
+                  {sec.key !== 'done' && p.totalPerUnit > 0 && (
+                    <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {(stats.buyerProgress || []).length > 0 && (
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
+          <h2 className="font-semibold text-[#111827] mb-3">👥 Tiến độ NVMH check giá</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[320px]">
+              <thead>
+                <tr className="text-xs text-[#6B7280] border-b border-[#E5E7EB]">
+                  <th className="text-left pb-2 font-medium">Nhân viên</th>
+                  <th className="text-right pb-2 font-medium">Tổng</th>
+                  <th className="text-right pb-2 font-medium">Đã báo giá</th>
+                  <th className="text-right pb-2 font-medium">Chờ báo</th>
+                  <th className="text-right pb-2 font-medium">Tiến độ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F3F4F6]">
+                {stats.buyerProgress.map((b: any) => {
+                  const pct = b.total > 0 ? Math.round(b.priced / b.total * 100) : 0
+                  return (
+                    <tr key={b.id} className="hover:bg-[#F9FAFB]">
+                      <td className="py-2 font-medium text-[#111827]">{b.name}</td>
+                      <td className="py-2 text-right text-[#6B7280]">{b.total}</td>
+                      <td className="py-2 text-right text-green-600 font-semibold">{b.priced}</td>
+                      <td className="py-2 text-right" style={{ color: b.pending > 0 ? '#E05B28' : '#16A34A' }}>{b.pending}</td>
+                      <td className="py-2 text-right">
+                        <div className="flex items-center gap-2 justify-end">
+                          <div className="w-16 h-1.5 rounded-full bg-[#E5E7EB] overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#16A34A' : '#E05B28' }} />
+                          </div>
+                          <span className="text-xs text-[#6B7280]">{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SkeletonCard() {
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4 animate-pulse">
@@ -324,18 +450,7 @@ export default function DashboardContent() {
 
       {stats.role === 'ADMIN' && <AdminDashboard stats={stats} />}
 
-      {stats.role === 'LEADER_PM' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: '#EDE9FE' }}>⚙️</div>
-            <div><div className="text-2xl font-bold text-[#111827]">{stats.pending_setup || 0}</div><div className="text-sm text-[#6B7280]">Chờ thiết lập</div></div>
-          </div>
-          <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: '#FFF3EE' }}>💰</div>
-            <div><div className="text-2xl font-bold text-[#111827]">{stats.pricing || 0}</div><div className="text-sm text-[#6B7280]">Đang check giá</div></div>
-          </div>
-        </div>
-      )}
+      {stats.role === 'LEADER_PM' && <LeaderPMDashboard stats={stats} />}
 
       {stats.role === 'BUYER' && <BuyerDashboard stats={stats} />}
     </div>

@@ -3,7 +3,9 @@ export interface PricingInputs {
   weightKg: number
   volumeM3: number               // số khối — dùng để tính cước quốc tế
   domesticFreightCny: number
-  inspectionCny: number
+  inspectionCny?: number         // legacy: kiểm định in CNY (sẽ nhân với fxRate)
+  inspectionVnd?: number         // mới: kiểm định in VND (dùng trực tiếp)
+  quarantineCny?: number         // mới: kiểm dịch in tệ (sẽ nhân với fxRate)
   qtyPerBox: number
 }
 export interface DailyRates {
@@ -19,7 +21,7 @@ export function calculateLandedCost(
   rates: DailyRates,
   freightType: 'nguyen_xe' | 'ghep_xe' | 'default' = 'default'
 ) {
-  const { factoryCny, volumeM3, domesticFreightCny, inspectionCny, qtyPerBox } = inputs
+  const { factoryCny, volumeM3, domesticFreightCny, qtyPerBox } = inputs
   const { fxRate, exportTaxPct, importTaxPct } = rates
 
   // Pick freight rate (VND/m³) based on selected type
@@ -38,8 +40,10 @@ export function calculateLandedCost(
   const importTaxBase = factoryVND + exportTaxAmt + intlFreightAmt
   const importTaxAmt = importTaxBase * importTaxPct / 100
   const domesticVND = domesticFreightCny * fxRate
-  const inspectionVND = inspectionCny * fxRate
-  const totalPerUnit = factoryVND + exportTaxAmt + intlFreightAmt + importTaxAmt + domesticVND + inspectionVND
+  // inspectionVnd: người dùng nhập thẳng VND; inspectionCny: legacy dùng nhân fxRate
+  const inspectionVND = (inputs.inspectionVnd ?? 0) + (inputs.inspectionCny || 0) * fxRate
+  const quarantineVND = (inputs.quarantineCny || 0) * fxRate
+  const totalPerUnit = factoryVND + exportTaxAmt + intlFreightAmt + importTaxAmt + domesticVND + inspectionVND + quarantineVND
   const totalPerBox = totalPerUnit * qtyPerBox
   return {
     totalPerUnit: Math.round(totalPerUnit),
@@ -51,6 +55,7 @@ export function calculateLandedCost(
       importTaxAmt: Math.round(importTaxAmt),
       domesticVND: Math.round(domesticVND),
       inspectionVND: Math.round(inspectionVND),
+      quarantineVND: Math.round(quarantineVND),
     },
   }
 }
