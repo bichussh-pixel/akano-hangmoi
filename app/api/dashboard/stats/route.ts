@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { getProducts, getProductsAssignedToUser } from '@/lib/firebase'
+import { USERS } from '@/lib/users'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -11,31 +12,63 @@ export async function GET() {
 
   if (user.role === 'ADMIN') {
     const byStatus = (s: string) => all.filter(p => p.status === s)
-    const miniProduct = (p: any) => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit, pricedBy: p.pricedBy })
+    const miniProduct = (p: any) => ({
+      id: p.id, name: p.name, checkCode: p.checkCode, status: p.status,
+      marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit, pricedBy: p.pricedBy,
+    })
+
+    const doneList = byStatus('done')
+    const totalImportCost = doneList.reduce((s, p) => s + (p.totalImportCost || 0), 0)
+    const totalImportQty  = doneList.reduce((s, p) => s + (p.importQty || 0), 0)
+
+    // NV mua hàng summary
+    const nvMap: Record<string, { name: string; count: number; totalCost: number }> = {}
+    for (const p of doneList) {
+      if (!p.assignedBuyerId) continue
+      if (!nvMap[p.assignedBuyerId]) {
+        const u = USERS.find(u => u.id === p.assignedBuyerId)
+        nvMap[p.assignedBuyerId] = { name: u?.name || p.assignedBuyerId, count: 0, totalCost: 0 }
+      }
+      nvMap[p.assignedBuyerId].count++
+      nvMap[p.assignedBuyerId].totalCost += (p.totalImportCost || 0)
+    }
+    const nvImportSummary = Object.entries(nvMap).map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.totalCost - a.totalCost)
+
     return NextResponse.json({
       role: 'ADMIN',
       pending_review: byStatus('pending_review').length,
       pending_setup: byStatus('pending_setup').length,
       pricing: byStatus('pricing').length,
       pending_final: byStatus('pending_final').length,
-      done: byStatus('done').length,
+      done: doneList.length,
       rejected: byStatus('rejected').length,
-      // Lists for drill-down
+      // Import stats
+      totalImportCost,
+      totalImportQty,
+      nvImportSummary,
+      // Drill-down lists
       pendingReviewList: byStatus('pending_review').map(miniProduct),
-      pendingSetupList: byStatus('pending_setup').map(miniProduct),
-      pricingList: byStatus('pricing').map(miniProduct),
-      pendingFinalList: byStatus('pending_final').map(miniProduct),
-      doneList: byStatus('done').map(miniProduct),
+      pendingSetupList:  byStatus('pending_setup').map(miniProduct),
+      pricingList:       byStatus('pricing').map(miniProduct),
+      pendingFinalList:  byStatus('pending_final').map(miniProduct),
+      doneList: doneList.map(p => ({
+        ...miniProduct(p),
+        importQty: p.importQty || 0,
+        totalImportCost: p.totalImportCost || 0,
+        assignedBuyerId: p.assignedBuyerId || '',
+        assignedBuyerName: USERS.find(u => u.id === p.assignedBuyerId)?.name || '',
+        decidedAt: p.decidedAt,
+      })),
       rejectedList: byStatus('rejected').map(miniProduct),
       recent: all.slice(0, 5),
     })
   }
 
   if (user.role === 'LEADER_PM') {
-    const pendingSetup = all.filter(p => p.status === 'pending_setup')
     return NextResponse.json({
       role: 'LEADER_PM',
-      pending_setup: pendingSetup.length,
+      pending_setup: all.filter(p => p.status === 'pending_setup').length,
       pricing: all.filter(p => p.status === 'pricing').length,
     })
   }
@@ -45,16 +78,29 @@ export async function GET() {
   const assigned = all.filter(p => assignedIds.includes(p.id!))
   const needPricing = assigned.filter(p => p.status === 'pricing')
   const alreadyPriced = all.filter(p => p.pricedBy === user.id && ['pending_final','done','rejected'].includes(p.status))
-  const decided = alreadyPriced.filter(p => ['done','rejected'].includes(p.status))
+  const decidedItems = alreadyPriced.filter(p => ['done','rejected'].includes(p.status))
+  // Products where this NV is the assignedBuyer (confirmed to buy)
+  const myImports = all.filter(p => p.status === 'done' && p.assignedBuyerId === user.id)
+  const totalMyImport = myImports.reduce((s, p) => s + (p.totalImportCost || 0), 0)
+
   return NextResponse.json({
     role: 'BUYER',
     need_pricing: needPricing.length,
     priced: alreadyPriced.length,
-    decided: decided.length,
+    decided: decidedItems.length,
     total_assigned: assigned.length,
-    // Lists for drill-down
+    my_imports: myImports.length,
+    totalMyImport,
+    // Drill-down lists
     needPricingList: needPricing.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice })),
     pricedList: alreadyPriced.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit })),
-    decidedList: decided.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit })),
+    decidedList: decidedItems.map(p => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit })),
+    myImportList: myImports.map(p => ({
+      id: p.id, name: p.name, checkCode: p.checkCode,
+      totalPerUnit: p.totalPerUnit || 0,
+      importQty: p.importQty || 0,
+      totalImportCost: p.totalImportCost || 0,
+      decidedAt: p.decidedAt,
+    })),
   })
 }

@@ -54,6 +54,7 @@ const navItems: Record<string, { label: string; href: string; icon: string }[]> 
     { label: 'Import Kalodata', href: '/import', icon: '📥' },
     { label: 'Duyệt hàng', href: '/review', icon: '✅' },
     { label: 'Chốt nhập', href: '/decide', icon: '🏁' },
+    { label: 'Đã nhập', href: '/imports', icon: '📦' },
   ],
   LEADER_PM: [
     { label: 'Dashboard',          href: '/dashboard', icon: '📊' },

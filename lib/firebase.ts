@@ -213,6 +213,7 @@ export interface Product {
   rejectReason?: string
   decidedBy?: string
   decidedAt?: number
+  estimatedImportPrice?: number
   // Step 6
   kiotCode?: string
   kiotCreatedAt?: number

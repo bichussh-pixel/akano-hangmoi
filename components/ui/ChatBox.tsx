@@ -24,7 +24,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [pendingMedia, setPendingMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const [hasUnread, setHasUnread] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function markSeen() {
@@ -53,7 +53,8 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
   }, [productId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -102,7 +103,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
           {hasUnread && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />}
         </h4>
       </div>
-      <div className="h-56 overflow-y-auto p-4 space-y-3">
+      <div ref={chatScrollRef} className="h-56 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
           <p className="text-xs text-[#6B7280] text-center py-4">Chưa có tin nhắn</p>
         )}
@@ -146,7 +147,6 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
             </div>
           )
         })}
-        <div ref={bottomRef} />
       </div>
 
       {/* Pending media preview */}

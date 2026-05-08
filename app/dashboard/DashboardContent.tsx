@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import ProductStatusBadge from '@/components/ui/ProductStatusBadge'
 
+function fmt(n: number) {
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+}
+
 function BuyerDashboard({ stats }: { stats: any }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
-
-  function fmt(n: number) {
-    return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
-  }
 
   const sections = [
     {
@@ -44,6 +44,17 @@ function BuyerDashboard({ stats }: { stats: any }) {
       actionLabel: undefined as string | undefined,
       actionHref: undefined as string | undefined,
     },
+    {
+      key: 'my_imports',
+      label: 'Tôi nhập',
+      value: stats.my_imports || 0,
+      icon: '📦',
+      bg: '#FFF3EE', color: '#E05B28',
+      list: stats.myImportList || [],
+      emptyMsg: 'Chưa có mã nào được chốt nhập cho bạn',
+      actionLabel: undefined as string | undefined,
+      actionHref: undefined as string | undefined,
+    },
   ]
 
   const statusLabel: Record<string, string> = {
@@ -53,22 +64,33 @@ function BuyerDashboard({ stats }: { stats: any }) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      {/* Import value banner */}
+      {(stats.totalMyImport || 0) > 0 && (
+        <div className="rounded-xl p-4 mb-6 flex items-center gap-4" style={{ backgroundColor: '#FFF3EE', border: '1px solid #FDBA74' }}>
+          <span className="text-2xl">📦</span>
+          <div>
+            <div className="text-xs text-[#6B7280]">Tổng giá trị hàng tôi nhập</div>
+            <div className="text-xl font-bold" style={{ color: '#E05B28' }}>{fmt(stats.totalMyImport)}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {sections.map(sec => (
           <button
             key={sec.key}
             onClick={() => setOpenSection(openSection === sec.key ? null : sec.key)}
-            className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4 text-left hover:shadow-md transition-shadow w-full"
+            className="bg-white rounded-xl border border-[#E5E7EB] p-4 flex items-center gap-3 text-left hover:shadow-md transition-shadow w-full"
             style={{ borderColor: openSection === sec.key ? sec.color : '#E5E7EB' }}
           >
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0" style={{ backgroundColor: sec.bg }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: sec.bg }}>
               {sec.icon}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="text-2xl font-bold text-[#111827]">{sec.value}</div>
-              <div className="text-sm text-[#6B7280]">{sec.label}</div>
+              <div className="text-xs text-[#6B7280] truncate">{sec.label}</div>
             </div>
-            <span className="text-[#6B7280]">{openSection === sec.key ? '▲' : '▼'}</span>
+            <span className="text-[#6B7280] text-xs">{openSection === sec.key ? '▲' : '▼'}</span>
           </button>
         ))}
       </div>
@@ -91,10 +113,19 @@ function BuyerDashboard({ stats }: { stats: any }) {
                     {p.checkCode || '—'}
                   </span>
                   <span className="flex-1 text-sm font-medium text-[#111827] truncate">{p.name}</span>
-                  {p.totalPerUnit && (
-                    <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>
+                  {sec.key === 'my_imports' ? (
+                    <>
+                      {p.importQty > 0 && <span className="text-xs text-[#6B7280] shrink-0">{p.importQty} thùng</span>}
+                      {p.totalImportCost > 0 && <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalImportCost)}</span>}
+                    </>
+                  ) : (
+                    <>
+                      {p.totalPerUnit > 0 && (
+                        <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>
+                      )}
+                      <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
+                    </>
                   )}
-                  <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
                 </div>
               ))}
             </div>
@@ -108,15 +139,11 @@ function BuyerDashboard({ stats }: { stats: any }) {
 function AdminDashboard({ stats }: { stats: any }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
 
-  function fmt(n: number) {
-    return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
-  }
-
   const sections = [
     { key: 'pending_review', label: 'Chờ duyệt', icon: '👁️', bg: '#DBEAFE', color: '#2563EB', value: stats.pending_review || 0, list: stats.pendingReviewList || [], href: '/review' },
     { key: 'pricing', label: 'Đang check giá', icon: '💰', bg: '#FFF3EE', color: '#E05B28', value: stats.pricing || 0, list: stats.pricingList || [], href: '/review' },
     { key: 'pending_final', label: 'Chờ chốt', icon: '⏳', bg: '#FEF3C7', color: '#D97706', value: stats.pending_final || 0, list: stats.pendingFinalList || [], href: '/decide' },
-    { key: 'done', label: 'Đã nhập', icon: '✅', bg: '#DCFCE7', color: '#16A34A', value: stats.done || 0, list: stats.doneList || [], href: null },
+    { key: 'done', label: 'Đã nhập', icon: '✅', bg: '#DCFCE7', color: '#16A34A', value: stats.done || 0, list: stats.doneList || [], href: '/imports' },
     { key: 'pending_setup', label: 'Chờ thiết lập', icon: '⚙️', bg: '#EDE9FE', color: '#7C3AED', value: stats.pending_setup || 0, list: stats.pendingSetupList || [], href: '/review' },
     { key: 'rejected', label: 'Từ chối', icon: '❌', bg: '#FEE2E2', color: '#DC2626', value: stats.rejected || 0, list: stats.rejectedList || [], href: null },
   ]
@@ -129,8 +156,29 @@ function AdminDashboard({ stats }: { stats: any }) {
 
   return (
     <div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 mb-6">
-        {sections.slice(0, 6).map(sec => (
+      {/* Import totals bar */}
+      {(stats.totalImportCost || 0) > 0 && (
+        <div className="rounded-xl p-4 mb-6 flex items-center justify-between gap-4 flex-wrap" style={{ backgroundColor: '#FFF3EE', border: '1px solid #FDBA74' }}>
+          <div className="flex items-center gap-6 flex-wrap">
+            <div>
+              <div className="text-xs text-[#6B7280]">Tổng tiền nhập</div>
+              <div className="text-xl font-bold" style={{ color: '#E05B28' }}>{fmt(stats.totalImportCost)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-[#6B7280]">Tổng SL (thùng)</div>
+              <div className="text-xl font-bold text-[#111827]">{(stats.totalImportQty || 0).toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-xs text-[#6B7280]">Số mã đã nhập</div>
+              <div className="text-xl font-bold text-[#111827]">{stats.done || 0}</div>
+            </div>
+          </div>
+          <a href="/imports" className="text-sm font-semibold underline shrink-0" style={{ color: '#E05B28' }}>Xem DS nhập →</a>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+        {sections.map(sec => (
           <button key={sec.key}
             onClick={() => setOpenSection(openSection === sec.key ? null : sec.key)}
             className="bg-white rounded-xl border p-4 flex items-center gap-3 text-left hover:shadow-md transition-shadow w-full"
@@ -166,8 +214,18 @@ function AdminDashboard({ stats }: { stats: any }) {
                     {p.checkCode || '—'}
                   </span>
                   <span className="flex-1 text-sm text-[#111827] truncate">{p.name}</span>
-                  {p.totalPerUnit && <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>}
-                  <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
+                  {sec.key === 'done' ? (
+                    <>
+                      {p.assignedBuyerName && <span className="text-xs text-[#6B7280] shrink-0">{p.assignedBuyerName}</span>}
+                      {p.importQty > 0 && <span className="text-xs text-[#6B7280] shrink-0">{p.importQty} thùng</span>}
+                      {p.totalImportCost > 0 && <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalImportCost)}</span>}
+                    </>
+                  ) : (
+                    <>
+                      {p.totalPerUnit > 0 && <span className="text-xs font-semibold shrink-0" style={{ color: '#E05B28' }}>{fmt(p.totalPerUnit)}/chiếc</span>}
+                      <span className="text-xs text-[#6B7280] shrink-0">{statusLabel[p.status] || p.status}</span>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -175,8 +233,33 @@ function AdminDashboard({ stats }: { stats: any }) {
         </div>
       ))}
 
-      {stats.recent && stats.recent.length > 0 && !openSection && (
+      {/* NV import summary */}
+      {stats.nvImportSummary?.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
+          <h2 className="font-semibold text-[#111827] mb-3">👥 NVMH — DS nhập hàng</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-[#6B7280] border-b border-[#E5E7EB]">
+                <th className="text-left pb-2 font-medium">Nhân viên</th>
+                <th className="text-right pb-2 font-medium">Số mã</th>
+                <th className="text-right pb-2 font-medium">Tổng tiền nhập</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F3F4F6]">
+              {stats.nvImportSummary.map((nv: any) => (
+                <tr key={nv.id} className="hover:bg-[#F9FAFB]">
+                  <td className="py-2 font-medium text-[#111827]">{nv.name || nv.id}</td>
+                  <td className="py-2 text-right text-[#6B7280]">{nv.count} mã</td>
+                  <td className="py-2 text-right font-semibold" style={{ color: '#E05B28' }}>{fmt(nv.totalCost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {stats.recent && stats.recent.length > 0 && !openSection && !stats.nvImportSummary?.length && (
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 mt-4">
           <h2 className="font-semibold text-[#111827] mb-4">Hoạt động gần đây</h2>
           <div className="space-y-3">
             {stats.recent.map((p: any) => (
@@ -194,20 +277,6 @@ function AdminDashboard({ stats }: { stats: any }) {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function StatCard({ label, value, icon, bg, color }: { label: string; value: number; icon: string; bg: string; color: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: bg }}>
-        {icon}
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-[#111827]">{value}</div>
-        <div className="text-sm text-[#6B7280]">{label}</div>
-      </div>
     </div>
   )
 }
@@ -257,14 +326,18 @@ export default function DashboardContent() {
 
       {stats.role === 'LEADER_PM' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard label="Chờ thiết lập" value={stats.pending_setup || 0} icon="⚙️" bg="#EDE9FE" color="#7C3AED" />
-          <StatCard label="Đang check giá" value={stats.pricing || 0} icon="💰" bg="#FFF3EE" color="#E05B28" />
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: '#EDE9FE' }}>⚙️</div>
+            <div><div className="text-2xl font-bold text-[#111827]">{stats.pending_setup || 0}</div><div className="text-sm text-[#6B7280]">Chờ thiết lập</div></div>
+          </div>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: '#FFF3EE' }}>💰</div>
+            <div><div className="text-2xl font-bold text-[#111827]">{stats.pricing || 0}</div><div className="text-sm text-[#6B7280]">Đang check giá</div></div>
+          </div>
         </div>
       )}
 
-      {stats.role === 'BUYER' && (
-        <BuyerDashboard stats={stats} />
-      )}
+      {stats.role === 'BUYER' && <BuyerDashboard stats={stats} />}
     </div>
   )
 }

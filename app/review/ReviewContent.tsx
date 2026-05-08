@@ -82,6 +82,7 @@ export default function ReviewContent() {
   // Per-product inputs
   const [specs, setSpecs] = useState<Record<string, Spec>>({})
   const [qtys,  setQtys]  = useState<Record<string, string>>({})
+  const [estimatedPrices, setEstimatedPrices] = useState<Record<string, string>>({})
   const [imgErr, setImgErr] = useState<Record<string, boolean>>({})
   const [reviewPhotos, setReviewPhotos] = useState<Record<string, string[]>>({})
 
@@ -157,6 +158,7 @@ export default function ReviewContent() {
           ids: [...selected],
           specs: Object.fromEntries([...selected].map(id => [id, specs[id] || { weight:'', dimensions:'', material:'', useCases:'' }])),
           qtys: Object.fromEntries([...selected].map(id => [id, qtys[id] || ''])),
+          estimatedPrices: Object.fromEntries([...selected].map(id => [id, estimatedPrices[id] || ''])),
           photos: Object.fromEntries([...selected].map(id => [id, reviewPhotos[id] || []])),
         }),
       })
@@ -166,6 +168,7 @@ export default function ReviewContent() {
       setSelected(new Set())
       setSpecs({})
       setQtys({})
+      setEstimatedPrices({})
       setReviewPhotos({})
       await fetchProducts()
     } catch {
@@ -491,16 +494,28 @@ export default function ReviewContent() {
                         </span>
                       </div>
 
-                      {/* SL nhập */}
-                      <div className="mb-3">
-                        <label className="text-xs text-[#6B7280] font-semibold mb-1 block">📦 SL nhập (thùng)</label>
-                        <input
-                          type="number" min="0"
-                          value={qtys[p.id] || ''}
-                          onChange={e => setQtys(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder="VD: 500"
-                          className={inpCls + ' w-32'}
-                        />
+                      {/* SL nhập + Giá nhập dự kiến */}
+                      <div className="flex gap-4 mb-3">
+                        <div>
+                          <label className="text-xs text-[#6B7280] font-semibold mb-1 block">📦 SL nhập (thùng)</label>
+                          <input
+                            type="number" min="0"
+                            value={qtys[p.id] || ''}
+                            onChange={e => setQtys(prev => ({ ...prev, [p.id]: e.target.value }))}
+                            placeholder="VD: 500"
+                            className={inpCls + ' w-28'}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
+                          <input
+                            type="number" min="0"
+                            value={estimatedPrices[p.id] || ''}
+                            onChange={e => setEstimatedPrices(prev => ({ ...prev, [p.id]: e.target.value }))}
+                            placeholder="VD: 45000"
+                            className={inpCls + ' w-36'}
+                          />
+                        </div>
                       </div>
 
                       {/* Specs 2x2 */}

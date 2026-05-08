@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { getProducts, getAssignments, getPricings } from '@/lib/firebase'
-import { getUserById } from '@/lib/users'
+import { getUserById, USERS } from '@/lib/users'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -8,8 +8,15 @@ export async function GET() {
   if (!session || (session.user as any)?.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const products = await getProducts({ status: 'pending_final' })
-  const withPricings = await Promise.all(products.map(async p => {
+
+  const [pendingFinalProducts, doneProducts, rejectedProducts] = await Promise.all([
+    getProducts({ status: 'pending_final' }),
+    getProducts({ status: 'done' }),
+    getProducts({ status: 'rejected' }),
+  ])
+
+  // Enrich pending_final with pricings
+  const withPricings = await Promise.all(pendingFinalProducts.map(async p => {
     const ids = await getAssignments(p.id!)
     const buyers = ids.map(id => getUserById(id)).filter(Boolean).map(u => ({ id: u!.id, name: u!.name }))
     const pricingsMap = await getPricings(p.id!)
@@ -18,7 +25,6 @@ export async function GET() {
       userId,
       userName: pr.userName || getUserById(userId)?.name || userId,
     }))
-    // Fallback: product priced before savePricing was added — synthesize from product fields
     if (pricings.length === 0 && p.pricedBy) {
       const u = getUserById(p.pricedBy)
       pricings = [{
@@ -46,5 +52,26 @@ export async function GET() {
     }
     return { ...p, assignedBuyers: buyers, pricings }
   }))
-  return NextResponse.json(withPricings)
+
+  // Enrich decided products with buyer name
+  const allUsers = USERS
+  const miniDecided = [...doneProducts, ...rejectedProducts].map(p => {
+    const buyer = allUsers.find(u => u.id === p.assignedBuyerId)
+    return {
+      id: p.id,
+      name: p.name,
+      checkCode: p.checkCode,
+      status: p.status,
+      totalPerUnit: p.totalPerUnit || 0,
+      importQty: p.importQty || 0,
+      totalImportCost: p.totalImportCost || 0,
+      importWarehouse: p.importWarehouse,
+      decidedAt: p.decidedAt,
+      assignedBuyerId: p.assignedBuyerId,
+      assignedBuyerName: buyer?.name || '',
+      rejectReason: p.rejectReason || '',
+    }
+  }).sort((a, b) => (b.decidedAt || 0) - (a.decidedAt || 0))
+
+  return NextResponse.json({ pending: withPricings, decided: miniDecided })
 }

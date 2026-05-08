@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   if (!session || user?.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const { ids, specs, qtys, photos } = await req.json()
+  const { ids, specs, qtys, photos, estimatedPrices } = await req.json()
   if (!Array.isArray(ids) || !ids.length) {
     return NextResponse.json({ error: 'No ids' }, { status: 400 })
   }
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       extra.specUseCases   = specs[id].useCases || ''
     }
     if (qtys?.[id]) extra.importQty = parseInt(qtys[id]) || 0
+    if (estimatedPrices?.[id]) extra.estimatedImportPrice = parseFloat(estimatedPrices[id]) || 0
     if (photos?.[id]?.length) {
       extra.photos = photos[id]
       extra.imageUrl = photos[id][0]  // first photo becomes main image
