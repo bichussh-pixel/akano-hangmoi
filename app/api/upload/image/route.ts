@@ -22,9 +22,15 @@ export async function POST(req: Request) {
   }
 
   // 2. Fallback: base64 data URL (works everywhere, stored in Firebase)
-  // Limit: 5MB for images, skip large videos
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: 'File quá lớn (tối đa 5MB). Vui lòng cài đặt Vercel Blob để upload video.' }, { status: 413 })
+  const isVideo = file.type.startsWith('video/')
+  if (isVideo) {
+    return NextResponse.json({
+      error: 'VIDEO_NO_STORAGE',
+      message: 'Chưa cấu hình Vercel Blob. Vui lòng dán link video vào ô "URL video" bên dưới.',
+    }, { status: 422 })
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Ảnh quá lớn (tối đa 8MB). Vui lòng nén ảnh trước khi tải lên.' }, { status: 413 })
   }
   const buffer = Buffer.from(await file.arrayBuffer())
   const base64 = buffer.toString('base64')

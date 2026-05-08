@@ -66,10 +66,45 @@ export async function GET() {
   }
 
   if (user.role === 'LEADER_PM') {
+    const miniProduct = (p: any) => ({
+      id: p.id, name: p.name, checkCode: p.checkCode, status: p.status,
+      marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit,
+    })
+    const buyers = USERS.filter(u => u.role === 'BUYER')
+    const pendingFinalList = all.filter(p => p.status === 'pending_final')
+    const doneList = all.filter(p => p.status === 'done')
+    const pricingList = all.filter(p => p.status === 'pricing')
+    const pendingSetupList = all.filter(p => p.status === 'pending_setup')
+
+    // Per-buyer pricing progress
+    const buyerProgress = await Promise.all(buyers.map(async b => {
+      const assignedIds = await getProductsAssignedToUser(b.id)
+      const total = assignedIds.length
+      const priced = all.filter(p => assignedIds.includes(p.id!) && p.status !== 'pricing' && p.status !== 'pending_setup' && p.status !== 'pending_review').length
+      const pending = all.filter(p => assignedIds.includes(p.id!) && p.status === 'pricing').length
+      return { id: b.id, name: b.name, total, priced, pending }
+    }))
+
     return NextResponse.json({
       role: 'LEADER_PM',
-      pending_setup: all.filter(p => p.status === 'pending_setup').length,
-      pricing: all.filter(p => p.status === 'pricing').length,
+      pending_setup: pendingSetupList.length,
+      pricing: pricingList.length,
+      pending_final: pendingFinalList.length,
+      done: doneList.length,
+      buyerProgress,
+      pricingList: pricingList.map(p => ({
+        ...miniProduct(p),
+        pricedByName: USERS.find(u => u.id === p.pricedBy)?.name || '',
+      })),
+      pendingFinalList: pendingFinalList.map(miniProduct),
+      doneList: doneList.map(p => ({
+        ...miniProduct(p),
+        assignedBuyerName: USERS.find(u => u.id === p.assignedBuyerId)?.name || '',
+        totalImportCost: p.totalImportCost || 0,
+        importQty: p.importQty || 0,
+      })),
+      pendingSetupList: pendingSetupList.map(miniProduct),
+      totalImportCost: doneList.reduce((s, p) => s + (p.totalImportCost || 0), 0),
     })
   }
 

@@ -24,9 +24,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const body = await req.json()
   const {
-    factoryCny, weightKg, volumeM3, domesticFreightCny, inspectionCny, qtyPerBox,
-    supplierName, supplierContact, moq, leadTime, pricingNotes, videoUrl,
-    freightType,
+    factoryCny, weightKg, volumeM3, domesticFreightCny,
+    inspectionCny, inspectionVnd, quarantineCny,
+    qtyPerBox, supplierName, supplierContact, moq, leadTime,
+    pricingNotes, videoUrl, freightType,
   } = body
 
   // Fetch daily rates for calculation
@@ -38,7 +39,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let totalPerUnit = 0, totalPerBox = 0, pricingBreakdown = {}
   if (rates && factoryCny) {
     const result = calculateLandedCost(
-      { factoryCny: +factoryCny, weightKg: +weightKg || 0, volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0, inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1 },
+      {
+        factoryCny: +factoryCny, weightKg: +weightKg || 0, volumeM3: +volumeM3 || 0,
+        domesticFreightCny: +domesticFreightCny || 0,
+        inspectionCny: inspectionCny != null ? +inspectionCny : 0,
+        inspectionVnd: inspectionVnd != null ? +inspectionVnd : 0,
+        quarantineCny: quarantineCny != null ? +quarantineCny : 0,
+        qtyPerBox: +qtyPerBox || 1,
+      },
       {
         fxRate: +rates.fxRate,
         intlFreightPerKg: +(rates.intlFreightPerKg || 0),
@@ -58,7 +66,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     status: 'pending_final',
     factoryCny: +factoryCny || 0, weightKg: +weightKg || 0,
     volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0,
-    inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1,
+    inspectionVnd: +inspectionVnd || 0, quarantineCny: +quarantineCny || 0,
+    qtyPerBox: +qtyPerBox || 1,
     totalPerUnit, totalPerBox, pricingBreakdown,
     supplierName: supplierName || '', supplierContact: supplierContact || '',
     moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
@@ -71,7 +80,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await savePricing(id, user.id, {
     factoryCny: +factoryCny || 0, weightKg: +weightKg || 0,
     volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0,
-    inspectionCny: +inspectionCny || 0, qtyPerBox: +qtyPerBox || 1,
+    inspectionVnd: +inspectionVnd || 0, quarantineCny: +quarantineCny || 0,
+    qtyPerBox: +qtyPerBox || 1,
     totalPerUnit, totalPerBox, pricingBreakdown,
     supplierName: supplierName || '', supplierContact: supplierContact || '',
     moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
