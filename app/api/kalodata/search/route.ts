@@ -2,13 +2,39 @@ import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 
 function passesFilter(p: any): boolean {
-  const allowed = ['gia dụng', 'thể thao', 'tiện ích', 'sắp xếp']
-  const blocked = ['hóa chất', 'tinh dầu', 'nước hoa', 'mỹ phẩm']
-  const cat = (p.category_name || p.category || '').toLowerCase()
-  const inAllowed = allowed.some(c => cat.includes(c))
-  const isBlocked = blocked.some(c => cat.includes(c))
+  const ALLOWED_CATS = ['gia dụng', 'thể thao', 'tiện ích', 'sắp xếp']
+
+  const BLOCKED_CATS = [
+    'hóa chất', 'tinh dầu', 'nước hoa', 'mỹ phẩm',
+    'thời trang', 'quần áo', 'trang phục', 'giày dép',
+    'túi xách', 'phụ kiện thời trang', 'hóa phẩm', 'tẩy rửa',
+  ]
+
+  // Block by product name regardless of category
+  const BLOCKED_NAMES = [
+    // Chất tẩy rửa
+    'bột giặt', 'nước giặt', 'nước rửa chén', 'nước lau', 'tẩy rửa',
+    'chất tẩy', 'tẩy trắng', 'xà phòng', 'xà bông', 'nước xả vải',
+    'nước tẩy', 'kem giặt', 'viên giặt', 'gel giặt',
+    // Quần áo, thời trang
+    'áo thun', 'áo sơ mi', 'áo polo', 'áo khoác', 'áo len',
+    'quần jean', 'quần short', 'quần tây', 'quần kaki',
+    'váy đầm', 'đầm maxi', 'chân váy', 'set đồ',
+    'giày thể thao', 'giày cao gót', 'sandal', 'dép lào', 'sneaker',
+    // Mỹ phẩm, dưỡng da
+    'kem dưỡng', 'serum', 'son môi', 'phấn nền', 'mascara',
+    'kem chống nắng', 'sữa rửa mặt', 'tẩy tế bào', 'mặt nạ dưỡng',
+  ]
+
+  const cat  = (p.category_name || p.category || '').toLowerCase()
+  const name = (p.name || '').toLowerCase()
+
+  const inAllowed   = ALLOWED_CATS.some(c => cat.includes(c))
+  const catBlocked  = BLOCKED_CATS.some(c => cat.includes(c))
+  const nameBlocked = BLOCKED_NAMES.some(k => name.includes(k))
+
   const price = p.market_price || p.price || 0
-  return inAllowed && !isBlocked && price >= 5000 && price <= 150000
+  return inAllowed && !catBlocked && !nameBlocked && price >= 5000 && price <= 150000
 }
 
 // Composite score: ưu tiên DS cao + tăng trưởng cao
