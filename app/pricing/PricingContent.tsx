@@ -31,6 +31,15 @@ interface Product {
   checkCode: string
   marketPrice: number
   growthRate?: number
+  sales30d?: number
+  category?: string
+  imageUrl?: string
+  kaloUrl?: string
+  shopUrl?: string
+  specWeight?: string
+  specDimensions?: string
+  specMaterial?: string
+  specUseCases?: string
   dailyRate?: DailyRate
   exportTaxPct?: number
   importTaxPct?: number
@@ -41,6 +50,19 @@ function fmtNum(n: number) {
 }
 function fmt(n: number) {
   return fmtNum(n) + 'đ'
+}
+function isUrl(s?: string): boolean {
+  return !!s && (s.startsWith('http://') || s.startsWith('https://'))
+}
+function getShopLink(p: any): string | null {
+  if (isUrl(p.shopUrl)) return p.shopUrl
+  if (p.name) return `https://www.tiktok.com/search?q=${encodeURIComponent(p.name)}&type=item`
+  return null
+}
+function getKaloLink(p: any): string | null {
+  if (isUrl(p.kaloUrl)) return p.kaloUrl
+  if (p.name) return `https://kalodata.com/vn/product/search?keyword=${encodeURIComponent(p.name)}&region=VN`
+  return null
 }
 
 interface PricingContentProps {
@@ -125,8 +147,18 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
         const data = await res.json()
         if (data.url) {
           setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), data.url] }))
+          // Auto-save photo to product immediately
+          await fetch(`/api/products/${productId}/photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: data.url }),
+          })
+        } else {
+          showToast('Lỗi tải ảnh — vui lòng thử lại')
         }
       }
+    } catch {
+      showToast('Lỗi kết nối khi tải ảnh')
     } finally {
       setUploading(null)
     }
@@ -220,6 +252,45 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                 {isOpen && (
                   <SafeBox>
                   <div className="px-5 pb-5 border-t border-[#F3F4F6] pt-4 space-y-5">
+                    {/* Product info card */}
+                    <div className="flex gap-3 p-4 bg-[#F9FAFB] rounded-xl border border-[#E5E7EB]">
+                      {isUrl(product.imageUrl) && (
+                        <img src={product.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#E5E7EB] shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap gap-3 text-xs text-[#6B7280] mb-2">
+                          {product.marketPrice > 0 && <span>💰 Giá TT: <strong className="text-[#111827]">{fmt(product.marketPrice)}</strong></span>}
+                          {(product.sales30d || 0) > 0 && <span>📦 <strong className="text-[#111827]">{(product.sales30d || 0).toLocaleString()}</strong> đơn/30 ngày</span>}
+                          {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}%</span>}
+                          {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
+                        </div>
+                        {(product.specWeight || product.specDimensions || product.specMaterial || product.specUseCases) && (
+                          <div className="grid grid-cols-2 gap-1 text-xs text-[#6B7280] mb-2">
+                            {product.specWeight && <span>🏋️ {product.specWeight}</span>}
+                            {product.specDimensions && <span>📐 {product.specDimensions}</span>}
+                            {product.specMaterial && <span>🧵 {product.specMaterial}</span>}
+                            {product.specUseCases && <span>✅ {product.specUseCases}</span>}
+                          </div>
+                        )}
+                        <div className="flex gap-2 flex-wrap">
+                          {getShopLink(product) && (
+                            <a href={getShopLink(product)!} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
+                              style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
+                              🏆 Shop bán chạy
+                            </a>
+                          )}
+                          {getKaloLink(product) && (
+                            <a href={getKaloLink(product)!} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
+                              style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
+                              🔗 Kalodata
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Daily rate info */}
                     {dr && (
                       <div className="bg-[#F9FAFB] rounded-lg px-4 py-3 flex flex-wrap gap-4 text-xs text-[#6B7280]">

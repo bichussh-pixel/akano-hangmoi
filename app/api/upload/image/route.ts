@@ -1,7 +1,5 @@
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -11,24 +9,25 @@ export async function POST(req: Request) {
   const file = formData.get('image') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  // Try Vercel Blob first
+  // 1. Try Vercel Blob first (preferred)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const { put } = await import('@vercel/blob')
-      const blob = await put(file.name, file, { access: 'public' })
+      const blob = await put(`uploads/${Date.now()}-${file.name}`, file, { access: 'public' })
       return NextResponse.json({ url: blob.url })
-    } catch {
-      // fall through to local
+    } catch (e) {
+      console.error('Blob upload failed:', e)
+      // fall through to base64
     }
   }
 
-  // Local fallback
+  // 2. Fallback: base64 data URL (works everywhere, stored in Firebase)
+  // Limit: 5MB for images, skip large videos
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: 'File quá lớn (tối đa 5MB). Vui lòng cài đặt Vercel Blob để upload video.' }, { status: 413 })
+  }
   const buffer = Buffer.from(await file.arrayBuffer())
-  const ext = file.name.split('.').pop() || 'jpg'
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads')
-  await mkdir(uploadDir, { recursive: true })
-  await writeFile(path.join(uploadDir, filename), buffer)
-
-  return NextResponse.json({ url: `/uploads/${filename}` })
+  const base64 = buffer.toString('base64')
+  const mimeType = file.type || 'image/jpeg'
+  return NextResponse.json({ url: `data:${mimeType};base64,${base64}` })
 }

@@ -83,6 +83,7 @@ export default function ReviewContent() {
   const [specs, setSpecs] = useState<Record<string, Spec>>({})
   const [qtys,  setQtys]  = useState<Record<string, string>>({})
   const [imgErr, setImgErr] = useState<Record<string, boolean>>({})
+  const [reviewPhotos, setReviewPhotos] = useState<Record<string, string[]>>({})
 
   // Excel upload
   const excelRef = useRef<HTMLInputElement>(null)
@@ -156,6 +157,7 @@ export default function ReviewContent() {
           ids: [...selected],
           specs: Object.fromEntries([...selected].map(id => [id, specs[id] || { weight:'', dimensions:'', material:'', useCases:'' }])),
           qtys: Object.fromEntries([...selected].map(id => [id, qtys[id] || ''])),
+          photos: Object.fromEntries([...selected].map(id => [id, reviewPhotos[id] || []])),
         }),
       })
       const data = await res.json()
@@ -164,6 +166,7 @@ export default function ReviewContent() {
       setSelected(new Set())
       setSpecs({})
       setQtys({})
+      setReviewPhotos({})
       await fetchProducts()
     } catch {
       showToast('Lỗi khi duyệt sản phẩm')
@@ -522,6 +525,40 @@ export default function ReviewContent() {
                           <label className="text-xs text-[#6B7280] mb-1 block">✅ Công dụng</label>
                           <input value={spec.useCases} onChange={e => updateSpec(p.id, 'useCases', e.target.value)}
                             placeholder="VD: Dùng trong bếp" className={inpCls} />
+                        </div>
+                      </div>
+
+                      {/* Photo upload for review */}
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold text-[#D97706] mb-2">🖼️ Ảnh sản phẩm</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(reviewPhotos[p.id] || []).map((url: string, i: number) => (
+                            <div key={i} className="w-14 h-14 rounded-lg border border-[#E5E7EB] overflow-hidden relative">
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                              <button type="button" onClick={() => setReviewPhotos(prev => ({ ...prev, [p.id]: (prev[p.id] || []).filter((_: string, j: number) => j !== i) }))}
+                                className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-xs flex items-center justify-center rounded-bl">×</button>
+                            </div>
+                          ))}
+                          <label className="w-14 h-14 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280]">
+                            <span className="text-lg leading-none">+</span>
+                            <span className="text-[9px]">Ảnh/Video</span>
+                            <input type="file" accept="image/*,video/*" multiple className="hidden"
+                              onChange={async (e) => {
+                                const files = e.target.files
+                                if (!files) return
+                                const urls: string[] = []
+                                for (const file of Array.from(files)) {
+                                  const fd = new FormData()
+                                  fd.append('image', file)
+                                  const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                                  const data = await res.json()
+                                  if (data.url) urls.push(data.url)
+                                }
+                                setReviewPhotos(prev => ({ ...prev, [p.id]: [...(prev[p.id] || []), ...urls] }))
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
                         </div>
                       </div>
                     </div>

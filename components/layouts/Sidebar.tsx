@@ -3,6 +3,42 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { signOut } from 'next-auth/react'
+import { useEffect, useState } from 'react'
+
+function UnreadBadge({ href, role }: { href: string; role: string }) {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    // Only show for pages where chat matters
+    const chatPages: Record<string, string[]> = {
+      '/decide': ['ADMIN'],
+      '/pricing': ['BUYER', 'LEADER_PM'],
+    }
+    const rolesForPage = chatPages[href]
+    if (!rolesForPage?.includes(role)) return
+
+    async function check() {
+      try {
+        const res = await fetch('/api/notifications/unread')
+        if (res.ok) {
+          const data = await res.json()
+          setCount(data.count || 0)
+        }
+      } catch {}
+    }
+    check()
+    const interval = setInterval(check, 30000)
+    return () => clearInterval(interval)
+  }, [href, role])
+
+  if (count === 0) return null
+  return (
+    <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+      style={{ backgroundColor: '#EF4444', color: 'white', fontSize: '10px' }}>
+      {count > 9 ? '9+' : count}
+    </span>
+  )
+}
 
 interface SidebarProps {
   user: {
@@ -82,7 +118,8 @@ export default function Sidebar({ user }: SidebarProps) {
               }}
             >
               <span>{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              <UnreadBadge href={item.href} role={role} />
             </Link>
           )
         })}

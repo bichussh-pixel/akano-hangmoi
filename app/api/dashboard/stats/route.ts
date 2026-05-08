@@ -10,18 +10,23 @@ export async function GET() {
   const all = await getProducts()
 
   if (user.role === 'ADMIN') {
-    const byStatus = (s: string) => all.filter(p => p.status === s).length
-    const doneProducts = all.filter(p => p.status === 'done')
-    const totalImport = doneProducts.reduce((s, p) => s + (p.totalImportCost || 0), 0)
+    const byStatus = (s: string) => all.filter(p => p.status === s)
+    const miniProduct = (p: any) => ({ id: p.id, name: p.name, checkCode: p.checkCode, status: p.status, marketPrice: p.marketPrice, totalPerUnit: p.totalPerUnit, pricedBy: p.pricedBy })
     return NextResponse.json({
       role: 'ADMIN',
-      pending_review: byStatus('pending_review'),
-      pending_setup: byStatus('pending_setup'),
-      pricing: byStatus('pricing'),
-      pending_final: byStatus('pending_final'),
-      done: byStatus('done'),
-      rejected: byStatus('rejected'),
-      totalImport,
+      pending_review: byStatus('pending_review').length,
+      pending_setup: byStatus('pending_setup').length,
+      pricing: byStatus('pricing').length,
+      pending_final: byStatus('pending_final').length,
+      done: byStatus('done').length,
+      rejected: byStatus('rejected').length,
+      // Lists for drill-down
+      pendingReviewList: byStatus('pending_review').map(miniProduct),
+      pendingSetupList: byStatus('pending_setup').map(miniProduct),
+      pricingList: byStatus('pricing').map(miniProduct),
+      pendingFinalList: byStatus('pending_final').map(miniProduct),
+      doneList: byStatus('done').map(miniProduct),
+      rejectedList: byStatus('rejected').map(miniProduct),
       recent: all.slice(0, 5),
     })
   }
