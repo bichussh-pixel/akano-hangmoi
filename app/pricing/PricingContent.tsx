@@ -136,27 +136,44 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
     } catch { return null }
   }
 
-  async function uploadMedia(productId: string, files: FileList) {
+  async function uploadMedia(productId: string, fileArr: File[]) {
+    if (!fileArr.length) return
     setUploading(productId)
     try {
-      const fileArr = Array.from(files)
-      for (const file of fileArr) {
-        const fd = new FormData()
-        fd.append('image', file)
-        const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
-        const data = await res.json()
-        if (data.url) {
-          setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), data.url] }))
-          // Auto-save photo to product immediately
-          await fetch(`/api/products/${productId}/photos`, {
+      // Upload all files in parallel
+      const results = await Promise.all(
+        fileArr.map(async (file) => {
+          const fd = new FormData()
+          fd.append('image', file)
+          try {
+            const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+            const data = await res.json()
+            return (data.url as string) || null
+          } catch {
+            return null
+          }
+        })
+      )
+      const uploadedUrls = results.filter((u): u is string => !!u)
+      if (uploadedUrls.length === 0) {
+        showToast('Lỗi tải ảnh — vui lòng thử lại')
+        return
+      }
+      if (uploadedUrls.length < fileArr.length) {
+        showToast(`Tải được ${uploadedUrls.length}/${fileArr.length} ảnh`)
+      }
+      // Update local state once
+      setPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), ...uploadedUrls] }))
+      // Auto-save all new photos to product (parallel)
+      await Promise.all(
+        uploadedUrls.map(url =>
+          fetch(`/api/products/${productId}/photos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: data.url }),
+            body: JSON.stringify({ url }),
           })
-        } else {
-          showToast('Lỗi tải ảnh — vui lòng thử lại')
-        }
-      }
+        )
+      )
     } catch {
       showToast('Lỗi kết nối khi tải ảnh')
     } finally {
@@ -461,7 +478,10 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                             disabled={uploading === product.id}
                             onChange={e => {
                               if (e.target.files && e.target.files.length > 0) {
-                                uploadMedia(product.id, e.target.files)
+                                // Convert to array BEFORE resetting value (FileList is live)
+                                const fileArr = Array.from(e.target.files)
+                                e.target.value = '' // reset so same files can be re-selected
+                                uploadMedia(product.id, fileArr)
                               }
                             }}
                           />

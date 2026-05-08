@@ -544,18 +544,26 @@ export default function ReviewContent() {
                             <span className="text-[9px]">Ảnh/Video</span>
                             <input type="file" accept="image/*,video/*" multiple className="hidden"
                               onChange={async (e) => {
-                                const files = e.target.files
-                                if (!files) return
-                                const urls: string[] = []
-                                for (const file of Array.from(files)) {
-                                  const fd = new FormData()
-                                  fd.append('image', file)
-                                  const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
-                                  const data = await res.json()
-                                  if (data.url) urls.push(data.url)
+                                if (!e.target.files || !e.target.files.length) return
+                                // Capture array BEFORE resetting
+                                const fileArr = Array.from(e.target.files)
+                                e.target.value = '' // reset immediately so picker re-opens correctly
+                                const productId = p.id
+                                const results = await Promise.all(
+                                  fileArr.map(async (file) => {
+                                    const fd = new FormData()
+                                    fd.append('image', file)
+                                    try {
+                                      const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                                      const data = await res.json()
+                                      return (data.url as string) || null
+                                    } catch { return null }
+                                  })
+                                )
+                                const urls = results.filter((u): u is string => !!u)
+                                if (urls.length) {
+                                  setReviewPhotos(prev => ({ ...prev, [productId]: [...(prev[productId] || []), ...urls] }))
                                 }
-                                setReviewPhotos(prev => ({ ...prev, [p.id]: [...(prev[p.id] || []), ...urls] }))
-                                e.target.value = ''
                               }}
                             />
                           </label>
