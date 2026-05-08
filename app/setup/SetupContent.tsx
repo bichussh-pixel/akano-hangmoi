@@ -235,7 +235,7 @@ export default function SetupContent() {
 
                 {isOpen && (
                   <div className="px-5 pb-5 border-t border-[#F3F4F6]">
-                    <div className="grid grid-cols-2 gap-4 mt-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 mb-4">
                       <div>
                         <label className="text-xs font-medium text-[#6B7280] mb-1 block">Thuế xuất khẩu (%)</label>
                         <input

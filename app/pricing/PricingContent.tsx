@@ -256,21 +256,23 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                 {/* Header */}
                 <button
                   type="button"
-                  className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#FAFAFA]"
+                  className="w-full flex items-start gap-3 p-4 text-left hover:bg-[#FAFAFA]"
                   onClick={() => setExpanded(isOpen ? null : product.id)}
                 >
                   <span
-                    className="px-2 py-0.5 text-xs font-mono rounded font-semibold"
+                    className="px-2 py-0.5 text-xs font-mono rounded font-semibold shrink-0 mt-0.5"
                     style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}
                   >
                     {product.checkCode}
                   </span>
-                  <span className="flex-1 text-sm font-semibold text-[#111827]">{product.name}</span>
-                  <span className="text-xs text-[#6B7280]">{fmt(product.marketPrice)}</span>
-                  {product.growthRate && (
-                    <span className="text-xs font-medium text-green-600">+{Number(product.growthRate).toFixed(1)}%</span>
-                  )}
-                  <span className="text-[#6B7280] ml-2">{isOpen ? '▲' : '▼'}</span>
+                  <span className="flex-1 text-sm font-semibold text-[#111827] min-w-0 break-words">{product.name}</span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="text-xs text-[#6B7280]">{fmt(product.marketPrice)}</span>
+                    {product.growthRate && (
+                      <span className="text-xs font-medium text-green-600">+{Number(product.growthRate).toFixed(1)}%</span>
+                    )}
+                    <span className="text-[#6B7280] text-xs">{isOpen ? '▲' : '▼'}</span>
+                  </div>
                 </button>
 
                 {isOpen && (
@@ -288,7 +290,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                           {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}%</span>}
                           {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
                         </div>
-                        <div className="grid grid-cols-2 gap-1 text-xs mb-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs mb-2">
                           <span className={product.specWeight ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
                             🏋️ {product.specWeight || 'Chưa nhập cân nặng'}
                           </span>
@@ -367,7 +369,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                     {/* Pricing inputs */}
                     <div>
                       <h4 className="text-sm font-semibold text-[#111827] mb-3">Thông tin giá</h4>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[
                           { key: 'factoryCny', label: 'Giá xuất xưởng (CNY/chiếc)', type: 'number' },
                           { key: 'weightKg', label: 'Cân nặng (kg/chiếc)', type: 'number' },
@@ -420,7 +422,7 @@ export default function PricingContent({ currentUser }: PricingContentProps) {
                     {/* Supplier info */}
                     <div>
                       <h4 className="text-sm font-semibold text-[#111827] mb-3">Thông tin nhà cung cấp</h4>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[
                           { key: 'supplierName', label: 'Tên NCC', type: 'text' },
                           { key: 'supplierContact', label: 'Liên hệ', type: 'text' },

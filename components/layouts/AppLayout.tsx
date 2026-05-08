@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import Sidebar from './Sidebar'
+import MobileWrapper from './MobileWrapper'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -12,12 +12,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     role: (session.user as any)?.role,
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-[#F3F4F6]">
-      <Sidebar user={user} />
-      <main className="flex-1 min-h-0 overflow-y-auto p-6">
-        {children}
-      </main>
-    </div>
-  )
+  return <MobileWrapper user={user}>{children}</MobileWrapper>
 }

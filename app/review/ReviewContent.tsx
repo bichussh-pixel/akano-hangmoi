@@ -118,7 +118,7 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
       </div>
 
       <div className="text-xs font-semibold text-blue-700 mb-2">📋 Thông số kỹ thuật</div>
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
         <div>
           <label className="text-xs text-[#6B7280] mb-1 block">🏋️ Cân nặng</label>
           <input value={spec.weight} onChange={e => updateSpec('weight', e.target.value)}
@@ -723,7 +723,7 @@ export default function ReviewContent() {
 
                           {/* Specs 2x2 */}
                           <div className="text-xs font-semibold text-[#D97706] mb-2">📋 Thông số kỹ thuật</div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div>
                               <label className="text-xs text-[#6B7280] mb-1 block">🏋️ Cân nặng</label>
                               <input value={spec.weight} onChange={e => updateSpec(p.id, 'weight', e.target.value)}
