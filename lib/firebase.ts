@@ -1,162 +1,57 @@
-// ─── Firebase – dùng chung cho cả client và server (API routes) ──────────────
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app'
-import {
-  getDatabase, ref, get, set, update, push, remove,
-  runTransaction, onValue, off, query, orderByChild,
-  equalTo, DatabaseReference, DataSnapshot,
-} from 'firebase/database'
+import { initializeApp, getApps, cert } from 'firebase-admin/app'
+import { getDatabase } from 'firebase-admin/database'
 
-// Config của project akano-workflow (đã có sẵn)
-const FIREBASE_CONFIG = {
-  apiKey:            'AIzaSyBoELbbjGBjjuOXFm1H9zNf98gfeDOVbdc',
-  authDomain:        'akano-workflow.firebaseapp.com',
-  databaseURL:       'https://akano-workflow-default-rtdb.asia-southeast1.firebasedatabase.app',
-  projectId:         'akano-workflow',
-  storageBucket:     'akano-workflow.firebasestorage.app',
-  messagingSenderId: '552263773009',
-  appId:             '1:552263773009:web:d5cdfa9e32121f87e08170',
+// ─── Firebase Admin init ──────────────────────────────────────────────────────
+function getApp() {
+  if (getApps().length > 0) return getApps()[0]
+
+  const projectId  = process.env.FIREBASE_PROJECT_ID
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+  const privateKey  = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+  const databaseURL = process.env.FIREBASE_DATABASE_URL
+
+  if (projectId && clientEmail && privateKey && databaseURL) {
+    return initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+      databaseURL,
+    })
+  }
+  return initializeApp()
 }
 
-// Root path cho app mới (không đụng data cũ)
-export const DB_ROOT = 'akano_hangmoi'
-
-let _app: FirebaseApp | null = null
-
-function getApp(): FirebaseApp {
-  if (_app) return _app
-  _app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG)
-  return _app
-}
-
-export function getDB() {
+function db() {
   return getDatabase(getApp())
 }
 
 // ─── Generic helpers ──────────────────────────────────────────────────────────
-
-export async function fbGet<T>(path: string): Promise<T | null> {
-  try {
-    const snap = await get(ref(getDB(), `${DB_ROOT}/${path}`))
-    return snap.exists() ? (snap.val() as T) : null
-  } catch { return null }
+async function fbGet<T>(path: string): Promise<T | null> {
+  const snap = await db().ref(path).once('value')
+  if (!snap.exists()) return null
+  return snap.val() as T
 }
 
-export async function fbSet(path: string, data: unknown): Promise<void> {
-  await set(ref(getDB(), `${DB_ROOT}/${path}`), data)
+async function fbSet(path: string, data: unknown): Promise<void> {
+  await db().ref(path).set(data)
 }
 
-export async function fbUpdate(path: string, data: Record<string, unknown>): Promise<void> {
-  await update(ref(getDB(), `${DB_ROOT}/${path}`), data)
+async function fbUpdate(path: string, data: Record<string, unknown>): Promise<void> {
+  await db().ref(path).update(data)
 }
 
 export async function fbPush(path: string, data: unknown): Promise<string> {
-  const r = await push(ref(getDB(), `${DB_ROOT}/${path}`), data)
-  return r.key!
-}
-
-export async function fbRemove(path: string): Promise<void> {
-  await remove(ref(getDB(), `${DB_ROOT}/${path}`))
-}
-
-/** Subscribe to realtime changes — returns unsubscribe fn */
-export function fbSubscribe(path: string, cb: (data: unknown) => void): () => void {
-  const r = ref(getDB(), `${DB_ROOT}/${path}`)
-  onValue(r, (snap) => cb(snap.exists() ? snap.val() : null))
-  return () => off(r)
-}
-
-// ─── Check Code — atomic sequence ────────────────────────────────────────────
-/**
- * Atomically generate next check code for today.
- * Format: C{YY}{MM}{DD}.{nn}  e.g. C260507.01
- */
-export async function generateCheckCode(date: Date): Promise<string> {
-  const yy = String(date.getFullYear()).slice(2)
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const dateKey = `${yy}${mm}${dd}`
-  const seqRef = ref(getDB(), `${DB_ROOT}/check_code_sequences/${dateKey}`)
-
-  let seq = 1
-  await runTransaction(seqRef, (current: number | null) => {
-    seq = (current ?? 0) + 1
-    return seq
-  })
-
-  return `C${dateKey}.${String(seq).padStart(2, '0')}`
-}
-
-// ─── Products ─────────────────────────────────────────────────────────────────
-
-export async function getProducts(filters?: { status?: string }): Promise<Product[]> {
-  const all = await fbGet<Record<string, Product>>('products')
-  if (!all) return []
-  let list = Object.entries(all).map(([id, p]) => ({ ...p, id }))
-  if (filters?.status) list = list.filter(p => p.status === filters.status)
-  return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-}
-
-export async function getProduct(id: string): Promise<Product | null> {
-  const p = await fbGet<Product>(`products/${id}`)
-  return p ? { ...p, id } : null
-}
-
-export async function saveProduct(id: string, data: Partial<Product>): Promise<void> {
-  await fbUpdate(`products/${id}`, data as Record<string, unknown>)
-}
-
-// ─── Assignments ──────────────────────────────────────────────────────────────
-
-export async function getAssignments(productId: string): Promise<string[]> {
-  const data = await fbGet<Record<string, boolean>>(`assignments/${productId}`)
-  return data ? Object.keys(data) : []
-}
-
-export async function setAssignments(productId: string, userIds: string[]): Promise<void> {
-  const data: Record<string, boolean> = {}
-  userIds.forEach(id => { data[id] = true })
-  await fbSet(`assignments/${productId}`, userIds.length ? data : null)
-}
-
-export async function getProductsAssignedToUser(userId: string): Promise<string[]> {
-  const all = await fbGet<Record<string, Record<string, boolean>>>('assignments')
-  if (!all) return []
-  return Object.entries(all)
-    .filter(([, users]) => users?.[userId])
-    .map(([productId]) => productId)
-}
-
-// ─── Daily Rates ──────────────────────────────────────────────────────────────
-
-export async function getDailyRate(date: Date): Promise<DailyRate | null> {
-  const key = formatDateKey(date)
-  return fbGet<DailyRate>(`daily_rates/${key}`)
-}
-
-export async function saveDailyRate(date: Date, rate: Omit<DailyRate, 'key'>): Promise<void> {
-  const key = formatDateKey(date)
-  await fbSet(`daily_rates/${key}`, { ...rate, key })
-}
-
-// ─── Messages ─────────────────────────────────────────────────────────────────
-
-export async function getMessages(productId: string): Promise<Message[]> {
-  const data = await fbGet<Record<string, Message>>(`messages/${productId}`)
-  if (!data) return []
-  return Object.entries(data)
-    .map(([id, m]) => ({ ...m, id }))
-    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
-}
-
-export async function addMessage(productId: string, msg: Omit<Message, 'id'>): Promise<string> {
-  return fbPush(`messages/${productId}`, msg)
+  const ref = await db().ref(path).push(data)
+  return ref.key!
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ProductStatus =
-  | 'new' | 'pending_review' | 'pending_setup'
-  | 'pricing' | 'pending_final' | 'done' | 'rejected'
+  | 'pending_review'
+  | 'pending_setup'
+  | 'pricing'
+  | 'pending_final'
+  | 'done'
+  | 'rejected'
 
 export interface Product {
   id?: string
@@ -166,6 +61,7 @@ export interface Product {
   imageUrl?: string
   marketPrice: number
   sales30d?: number
+  revenue30d?: number
   growthRate?: number
   kaloUrl?: string
   shopUrl?: string
@@ -191,6 +87,8 @@ export interface Product {
   volumeM3?: number
   domesticFreightCny?: number
   inspectionCny?: number
+  inspectionVnd?: number
+  quarantineCny?: number
   qtyPerBox?: number
   totalPerUnit?: number
   totalPerBox?: number
@@ -265,6 +163,8 @@ export interface ProductPricing {
   volumeM3?: number
   domesticFreightCny?: number
   inspectionCny?: number
+  inspectionVnd?: number
+  quarantineCny?: number
   qtyPerBox?: number
   totalPerUnit: number
   totalPerBox?: number
@@ -287,4 +187,111 @@ export async function savePricing(productId: string, userId: string, data: Produ
 
 export async function getPricings(productId: string): Promise<Record<string, ProductPricing>> {
   return (await fbGet<Record<string, ProductPricing>>(`pricings/${productId}`)) || {}
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+
+export async function getProducts(): Promise<Product[]> {
+  const data = await fbGet<Record<string, Omit<Product, 'id'>>>('products')
+  if (!data) return []
+  return Object.entries(data).map(([id, p]) => ({ ...p, id }))
+}
+
+export async function getProduct(id: string): Promise<Product | null> {
+  const data = await fbGet<Omit<Product, 'id'>>(`products/${id}`)
+  if (!data) return null
+  return { ...data, id }
+}
+
+export async function saveProduct(id: string, data: Partial<Product>): Promise<void> {
+  await fbUpdate(`products/${id}`, data as Record<string, unknown>)
+}
+
+export async function createProduct(data: Omit<Product, 'id'>): Promise<string> {
+  return fbPush('products', data)
+}
+
+// ─── Assignments ──────────────────────────────────────────────────────────────
+
+export async function getAssignments(productId: string): Promise<string[]> {
+  return (await fbGet<string[]>(`assignments/${productId}`)) || []
+}
+
+export async function setAssignments(productId: string, userIds: string[]): Promise<void> {
+  await fbSet(`assignments/${productId}`, userIds)
+}
+
+export async function getProductsAssignedToUser(userId: string): Promise<string[]> {
+  const allAssignments = await fbGet<Record<string, string[]>>('assignments')
+  if (!allAssignments) return []
+  return Object.entries(allAssignments)
+    .filter(([, userIds]) => userIds.includes(userId))
+    .map(([productId]) => productId)
+}
+
+// ─── Daily rates ──────────────────────────────────────────────────────────────
+
+export async function getDailyRate(date: Date): Promise<DailyRate | null> {
+  const key = formatDateKey(date)
+  const rate = await fbGet<DailyRate>(`dailyRates/${key}`)
+  if (rate) return { ...rate, key }
+
+  // Fallback: latest rate
+  const all = await fbGet<Record<string, DailyRate>>('dailyRates')
+  if (!all) return null
+  const keys = Object.keys(all).sort().reverse()
+  if (!keys.length) return null
+  return { ...all[keys[0]], key: keys[0] }
+}
+
+export async function saveDailyRate(date: Date, data: Omit<DailyRate, 'key'>): Promise<DailyRate> {
+  const key = formatDateKey(date)
+  await fbSet(`dailyRates/${key}`, data)
+  return { ...data, key }
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
+export async function getMessages(productId: string): Promise<Message[]> {
+  const data = await fbGet<Record<string, Omit<Message, 'id'>>>(`messages/${productId}`)
+  if (!data) return []
+  return Object.entries(data).map(([id, m]) => ({ ...m, id })).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export async function addMessage(productId: string, message: Omit<Message, 'id'>): Promise<void> {
+  await fbPush(`messages/${productId}`, message)
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id?: string
+  userId: string
+  message: string
+  productId?: string
+  read: boolean
+  createdAt: number
+}
+
+export async function addNotification(data: Omit<Notification, 'id'>): Promise<void> {
+  await fbPush('notifications', data)
+}
+
+export async function getUnreadNotifications(userId: string): Promise<Notification[]> {
+  const all = await fbGet<Record<string, Omit<Notification, 'id'>>>('notifications')
+  if (!all) return []
+  return Object.entries(all)
+    .map(([id, n]) => ({ ...n, id }))
+    .filter(n => n.userId === userId && !n.read)
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function markNotificationsRead(userId: string): Promise<void> {
+  const all = await fbGet<Record<string, Notification>>('notifications')
+  if (!all) return
+  const updates: Record<string, unknown> = {}
+  for (const [id, n] of Object.entries(all)) {
+    if (n.userId === userId && !n.read) updates[`notifications/${id}/read`] = true
+  }
+  if (Object.keys(updates).length > 0) await db().ref().update(updates)
 }
