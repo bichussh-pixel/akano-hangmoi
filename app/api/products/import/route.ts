@@ -26,6 +26,23 @@ function isBlocked(p: any): boolean {
   return BLOCKED_NAMES.some(k => name.includes(k)) || BLOCKED_CATS.some(k => cat.includes(k))
 }
 
+function normName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+// GET — trả về danh sách tên + URL đã có để UI đánh dấu trùng
+export async function GET(req: Request) {
+  const session = await auth()
+  if (!session || (session.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const existing = await getProducts()
+  return NextResponse.json({
+    names: existing.map(p => normName(p.name || '')).filter(Boolean),
+    urls:  existing.map(p => p.kaloUrl || '').filter(Boolean),
+  })
+}
+
 export async function POST(req: Request) {
   const session = await auth()
   if (!session || (session.user as any)?.role !== 'ADMIN') {
@@ -36,12 +53,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No products' }, { status: 400 })
   }
   const existing = await getProducts()
-  const existingUrls = new Set(existing.map(p => p.kaloUrl).filter(Boolean))
-  let added = 0
-  let skippedBlocked = 0
+  const existingUrls  = new Set(existing.map(p => p.kaloUrl).filter(Boolean))
+  const existingNames = new Set(existing.map(p => normName(p.name || '')).filter(Boolean))
+
+  let added = 0, skippedDup = 0, skippedBlocked = 0
   for (const p of kaloProducts) {
     const kaloUrl = p.kaloUrl || p.kalo_url || ''
-    if (kaloUrl && existingUrls.has(kaloUrl)) continue
+    if (kaloUrl && existingUrls.has(kaloUrl)) { skippedDup++; continue }
+    if (normName(p.name || '') && existingNames.has(normName(p.name || ''))) { skippedDup++; continue }
     if (isBlocked(p)) { skippedBlocked++; continue }
     await fbPush('products', {
       status: 'pending_review', createdAt: Date.now(),
@@ -54,6 +73,8 @@ export async function POST(req: Request) {
       description: p.description || p.desc || '', category: p.category || p.cat || '',
     })
     added++
+    existingNames.add(normName(p.name || ''))
+    if (kaloUrl) existingUrls.add(kaloUrl)
   }
-  return NextResponse.json({ added })
+  return NextResponse.json({ added, skippedDup, skippedBlocked })
 }
