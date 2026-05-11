@@ -4,9 +4,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  serverExternalPackages: ['firebase-admin'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'kalodata.com' },

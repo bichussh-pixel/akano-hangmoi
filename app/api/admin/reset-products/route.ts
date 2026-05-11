@@ -9,7 +9,8 @@ export async function DELETE() {
   if (!session || (session.user as any)?.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const products = await getProducts({ status: 'pending_review' })
+  const all = await getProducts()
+  const products = all.filter(p => p.status === 'pending_review')
   let deleted = 0
   for (const p of products) {
     if (p.id) {

@@ -43,6 +43,19 @@ export async function fbPush(path: string, data: unknown): Promise<string> {
   return ref.key!
 }
 
+export async function fbRemove(path: string): Promise<void> {
+  await db().ref(path).remove()
+}
+
+export async function generateCheckCode(date: Date): Promise<string> {
+  const d = date
+  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  const ref = db().ref(`counters/checkCodes/${dateStr}`)
+  const result = await ref.transaction((n: number | null) => (n || 0) + 1)
+  const seq = result.snapshot.val() as number
+  return `AKN${dateStr}${String(seq).padStart(3, '0')}`
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ProductStatus =
