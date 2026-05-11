@@ -64,7 +64,6 @@ function BuyerDashboard({ stats }: { stats: any }) {
 
   return (
     <div>
-      {/* Import value banner */}
       {(stats.totalMyImport || 0) > 0 && (
         <div className="rounded-xl p-4 mb-6 flex items-center gap-4" style={{ backgroundColor: '#FFF3EE', border: '1px solid #FDBA74' }}>
           <span className="text-2xl">📦</span>
@@ -159,7 +158,6 @@ function AdminDashboard({ stats }: { stats: any }) {
 
   return (
     <div>
-      {/* Import totals bar */}
       {(stats.totalImportCost || 0) > 0 && (
         <div className="rounded-xl p-4 mb-6 flex items-center justify-between gap-4 flex-wrap" style={{ backgroundColor: '#FFF3EE', border: '1px solid #FDBA74' }}>
           <div className="flex items-center gap-6 flex-wrap">
@@ -236,7 +234,6 @@ function AdminDashboard({ stats }: { stats: any }) {
         </div>
       ))}
 
-      {/* NV import summary */}
       {stats.nvImportSummary?.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
           <h2 className="font-semibold text-[#111827] mb-3">👥 NVMH — DS nhập hàng</h2>
@@ -288,10 +285,10 @@ function LeaderPMDashboard({ stats }: { stats: any }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
 
   const sections = [
-    { key: 'pricing', label: 'Đang check giá', icon: '💰', bg: '#FFF3EE', color: '#E05B28', value: stats.pricing || 0, list: stats.pricingList || [], href: '/pricing' },
-    { key: 'pending_final', label: 'Chờ Bích chốt', icon: '⏳', bg: '#FEF3C7', color: '#D97706', value: stats.pending_final || 0, list: stats.pendingFinalList || [], href: '/decide' },
-    { key: 'done', label: 'Đã nhập', icon: '✅', bg: '#DCFCE7', color: '#16A34A', value: stats.done || 0, list: stats.doneList || [], href: '/imports' },
-    { key: 'pending_setup', label: 'Chờ thiết lập', icon: '⚙️', bg: '#EDE9FE', color: '#7C3AED', value: stats.pending_setup || 0, list: stats.pendingSetupList || [], href: '/setup' },
+    { key: 'pricing',      label: 'Đang check giá', icon: '💰', bg: '#FFF3EE', color: '#E05B28', value: stats.pricing || 0,      list: stats.pricingList || [],      href: '/pricing' },
+    { key: 'pending_final',label: 'Chờ Bích chốt',  icon: '⏳', bg: '#FEF3C7', color: '#D97706', value: stats.pending_final || 0, list: stats.pendingFinalList || [], href: '/decide' },
+    { key: 'done',         label: 'Đã nhập',         icon: '✅', bg: '#DCFCE7', color: '#16A34A', value: stats.done || 0,         list: stats.doneList || [],         href: '/imports' },
+    { key: 'pending_setup',label: 'Chờ thiết lập',   icon: '⚙️', bg: '#EDE9FE', color: '#7C3AED', value: stats.pending_setup || 0, list: stats.pendingSetupList || [], href: '/setup' },
   ]
 
   return (
@@ -310,7 +307,7 @@ function LeaderPMDashboard({ stats }: { stats: any }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {sections.map(sec => (
           <button key={sec.key}
             onClick={() => setOpenSection(openSection === sec.key ? null : sec.key)}
