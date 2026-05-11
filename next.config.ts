@@ -3,13 +3,10 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: path.resolve('.'),
+    root: path.resolve(__dirname),
   },
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   serverExternalPackages: ['firebase-admin'],
   images: {
