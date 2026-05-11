@@ -22,7 +22,6 @@ const LOADING_STEPS = [
   'Hoàn tất!',
 ]
 
-// Kalodata XLSX column mapping
 const KALODATA_COL: Record<string, string[]> = {
   name:        ['tên sản phẩm'],
   imageUrl:    ['liên kết hình ảnh'],
@@ -51,9 +50,11 @@ function fmt(n: number) {
 function fmtNum(n: number) {
   return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
-
 function isUrl(s?: string): boolean {
   return !!s && (s.startsWith('http://') || s.startsWith('https://'))
+}
+function normName(name: string) {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
 type TabType = 'kalodata' | 'excel'
@@ -61,7 +62,6 @@ type TabType = 'kalodata' | 'excel'
 export default function ImportContent() {
   const [tab, setTab] = useState<TabType>('kalodata')
 
-  // Kalodata API state
   const [category,   setCategory]  = useState('Tất cả')
   const [keyword,    setKeyword]   = useState('')
   const [dateRange,  setDateRange] = useState('last30Day')
@@ -73,25 +73,44 @@ export default function ImportContent() {
   const [page,       setPage]      = useState(1)
   const [totalCount, setTotalCount]= useState(0)
 
-  // Excel state
   const excelRef = useRef<HTMLInputElement>(null)
   const [excelProducts, setExcelProducts] = useState<any[]>([])
   const [excelLoading,  setExcelLoading]  = useState(false)
   const [excelSelected, setExcelSelected] = useState<Set<string>>(new Set())
 
-  // Shared
-  const [selected,   setSelected]   = useState<Set<string>>(new Set())
-  const [imported,   setImported]   = useState<any[]>([])
-  const [importing,  setImporting]  = useState(false)
-  const [toast,      setToast]      = useState('')
-  const [imgErr,     setImgErr]     = useState<Record<string, boolean>>({})
+  const [selected,      setSelected]      = useState<Set<string>>(new Set())
+  const [imported,      setImported]      = useState<any[]>([])
+  const [importing,     setImporting]     = useState(false)
+  const [toast,         setToast]         = useState('')
+  const [imgErr,        setImgErr]        = useState<Record<string, boolean>>({})
+  const [existingNames, setExistingNames] = useState<Set<string>>(new Set())
+  const [existingUrls,  setExistingUrls]  = useState<Set<string>>(new Set())
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 3500)
   }
 
-  // ── Kalodata API ──────────────────────────────────────────────────────────
+  function isDup(p: any): boolean {
+    const url = p.kaloUrl || p.kalo_url || ''
+    return (!!url && existingUrls.has(url)) || existingNames.has(normName(p.name || ''))
+  }
+
+  async function fetchExisting() {
+    try {
+      const res = await fetch('/api/products/import')
+      if (!res.ok) return { names: new Set<string>(), urls: new Set<string>() }
+      const data = await res.json()
+      const names = new Set<string>((data.names || []).map((n: string) => normName(n)))
+      const urls  = new Set<string>(data.urls || [])
+      setExistingNames(names)
+      setExistingUrls(urls)
+      return { names, urls }
+    } catch {
+      return { names: new Set<string>(), urls: new Set<string>() }
+    }
+  }
+
   async function fetchPage(p: number) {
     setLoading(true)
     setLoadStep(0)
@@ -108,19 +127,26 @@ export default function ImportContent() {
       })
       const data = await res.json()
       let list = data.products || []
-      if (category !== 'Tất cả') list = list.filter((p: any) => (p.category || '').toLowerCase().includes(category.toLowerCase()))
-      if (keyword) list = list.filter((p: any) => (p.name || '').toLowerCase().includes(keyword.toLowerCase()))
+      if (category !== 'Tất cả') list = list.filter((q: any) => (q.category || '').toLowerCase().includes(category.toLowerCase()))
+      if (keyword) list = list.filter((q: any) => (q.name || '').toLowerCase().includes(keyword.toLowerCase()))
       setProducts(list)
       setTotalCount(data.total || list.length)
       setPage(p)
       setIsMock(data.mock || false)
+      const { names: eNames, urls: eUrls } = await fetchExisting()
+      const newOnly = new Set<string>(list
+        .filter((q: any) => {
+          const url = q.kaloUrl || q.kalo_url || ''
+          return !(url && eUrls.has(url)) && !eNames.has(normName(q.name || ''))
+        })
+        .map((q: any) => q.id))
+      setSelected(newOnly)
     } finally {
       setLoading(false)
     }
   }
   function handleFetch() { fetchPage(1) }
 
-  // ── Excel upload ──────────────────────────────────────────────────────────
   async function handleExcelFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -150,12 +176,20 @@ export default function ImportContent() {
         description: '',
         shopName:    '',
         source:      'excel' as const,
-      })).filter(p => p.name && !p.name.startsWith('SP '))
+      })).filter(q => q.name && !q.name.startsWith('SP '))
 
       if (!parsed.length) { showToast('Không đọc được dữ liệu từ Excel'); return }
       setExcelProducts(parsed)
-      setExcelSelected(new Set(parsed.map(p => p.id)))
-      showToast(`📊 Đọc được ${parsed.length} sản phẩm từ Excel`)
+      const { names: eNames, urls: eUrls } = await fetchExisting()
+      const newOnly = new Set<string>(parsed
+        .filter(q => {
+          const url = q.kaloUrl || ''
+          return !(url && eUrls.has(url)) && !eNames.has(normName(q.name || ''))
+        })
+        .map(q => q.id))
+      setExcelSelected(newOnly)
+      const dupCount = parsed.length - newOnly.size
+      showToast(`📊 ${parsed.length} sản phẩm từ Excel${dupCount > 0 ? ` · ${dupCount} đã có trong hệ thống` : ''}`)
     } catch (err: any) {
       showToast('Lỗi đọc Excel: ' + err.message)
     } finally {
@@ -164,7 +198,6 @@ export default function ImportContent() {
     }
   }
 
-  // ── Import (shared for both tabs) ─────────────────────────────────────────
   async function handleImport(list: any[], sel: Set<string>) {
     if (sel.size === 0) return
     setImporting(true)
@@ -179,7 +212,10 @@ export default function ImportContent() {
       setImported(prev => [...prev, ...toImport.map((p: any) => ({ ...p, _imported: true }))])
       if (tab === 'kalodata') setSelected(new Set())
       else setExcelSelected(new Set())
-      showToast(`Đã import ${data.added ?? sel.size} sản phẩm${(data.skipped ?? 0) > 0 ? ` (${data.skipped} bỏ qua trùng)` : ''}`)
+      const parts = [`✅ Đã thêm ${data.added ?? sel.size} sản phẩm`]
+      if ((data.skippedDup ?? 0) > 0) parts.push(`${data.skippedDup} trùng bỏ qua`)
+      if ((data.skippedBlocked ?? 0) > 0) parts.push(`${data.skippedBlocked} bị chặn`)
+      showToast(parts.join(' · '))
     } catch {
       showToast('Lỗi khi import')
     } finally {
@@ -187,12 +223,10 @@ export default function ImportContent() {
     }
   }
 
-  // ── Sort / rank ───────────────────────────────────────────────────────────
   const sorted  = [...products].sort((a, b) => (b.growth || 0) - (a.growth || 0))
   const top3Ids = new Set(sorted.slice(0, 3).map((p: any) => p.id))
   const rankColors = ['#FF4757', '#E05B28', '#D97706']
 
-  // ── Product card (shared renderer) ───────────────────────────────────────
   function ProductRow({ p, sel, onToggle, rank, isTop3 }: {
     p: any; sel: Set<string>; onToggle: (id: string) => void
     rank?: number; isTop3?: boolean
@@ -200,16 +234,19 @@ export default function ImportContent() {
     const hasImg = isUrl(p.img || p.imageUrl)
     const imgSrc = p.img || p.imageUrl
     const shopLink = isUrl(p.shopUrl) ? p.shopUrl : null
+    const dup = isDup(p)
 
     return (
-      <div className="flex gap-4 p-4 hover:bg-[#FAFAFA] cursor-pointer transition-colors"
-        onClick={() => onToggle(p.id)}>
+      <div className={`flex gap-4 p-4 transition-colors ${dup ? 'bg-[#F9FAFB] opacity-60' : 'hover:bg-[#FAFAFA] cursor-pointer'}`}
+        onClick={() => !dup && onToggle(p.id)}>
         <div className="flex items-start pt-0.5">
-          <input type="checkbox" checked={sel.has(p.id)} onChange={() => onToggle(p.id)}
-            onClick={e => e.stopPropagation()} className="w-4 h-4 accent-[#E05B28]" />
+          {dup
+            ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#E5E7EB] text-[#6B7280] whitespace-nowrap">Đã có</span>
+            : <input type="checkbox" checked={sel.has(p.id)} onChange={() => onToggle(p.id)}
+                onClick={e => e.stopPropagation()} className="w-4 h-4 accent-[#E05B28]" />
+          }
         </div>
 
-        {/* Image */}
         <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3F4F6] border border-[#E5E7EB] shrink-0 flex items-center justify-center text-2xl">
           {hasImg && !imgErr[p.id]
             ? <img src={imgSrc} alt={p.name} className="w-full h-full object-cover"
@@ -230,7 +267,6 @@ export default function ImportContent() {
           </div>
           <div className="text-xs text-[#6B7280] mb-2 line-clamp-2">{p.description}</div>
 
-          {/* Stats row */}
           <div className="flex flex-wrap gap-3 text-xs mb-2">
             <span className="text-[#374151] font-medium">
               📦 <span className="font-bold text-[#111827]">{fmtNum(p.sales30d || 0)}</span> đơn/30 ngày
@@ -242,7 +278,6 @@ export default function ImportContent() {
             )}
           </div>
 
-          {/* Tags & links */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
               {p.category}
@@ -290,7 +325,6 @@ export default function ImportContent() {
         <p className="text-[#6B7280] mt-1 text-sm">Tìm kiếm từ Kalodata API hoặc upload file Excel</p>
       </div>
 
-      {/* Rule reminder */}
       <div className="bg-[#FFF3EE] border border-orange-200 rounded-xl p-4 mb-5 text-sm">
         <div className="font-semibold text-[#E05B28] mb-1">Quy tắc lọc sản phẩm</div>
         <div className="text-[#111827]">
@@ -301,7 +335,6 @@ export default function ImportContent() {
         </div>
       </div>
 
-      {/* Tab switcher */}
       <div className="flex gap-2 mb-5">
         {([['kalodata', '🚀 Kalodata API'], ['excel', '📊 Upload Excel']] as [TabType, string][]).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)}
@@ -315,7 +348,6 @@ export default function ImportContent() {
         ))}
       </div>
 
-      {/* ── Tab: Kalodata API ── */}
       {tab === 'kalodata' && (
         <>
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 mb-5">
@@ -363,61 +395,68 @@ export default function ImportContent() {
             </div>
           )}
 
-          {products.length > 0 && !loading && (
-            <div className="bg-white rounded-xl border border-[#E5E7EB] mb-5">
-              <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setSelected(prev => prev.size === products.length ? new Set() : new Set(products.map((p: any) => p.id)))}
-                    className="text-sm text-[#E05B28] font-medium hover:underline">
-                    {selected.size === products.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-                  </button>
-                  <span className="text-[#6B7280] text-sm">{products.length} sản phẩm</span>
-                  {isMock && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Demo data</span>}
+          {products.length > 0 && !loading && (() => {
+            const newProducts = products.filter((p: any) => !isDup(p))
+            const dupCount = products.length - newProducts.length
+            return (
+              <div className="bg-white rounded-xl border border-[#E5E7EB] mb-5">
+                <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button onClick={() => setSelected(prev => prev.size === newProducts.length ? new Set() : new Set(newProducts.map((p: any) => p.id)))}
+                      className="text-sm text-[#E05B28] font-medium hover:underline">
+                      {selected.size === newProducts.length && newProducts.length > 0 ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                    </button>
+                    <span className="text-[#6B7280] text-sm">{products.length} sản phẩm</span>
+                    {dupCount > 0 && (
+                      <span className="text-xs bg-[#F3F4F6] text-[#6B7280] px-2 py-0.5 rounded-full">
+                        {dupCount} đã có trong hệ thống
+                      </span>
+                    )}
+                    {isMock && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Demo data</span>}
+                  </div>
+                  {selected.size > 0 && (
+                    <button onClick={() => handleImport(products, selected)} disabled={importing}
+                      className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
+                      style={{ backgroundColor: '#E05B28' }}>
+                      {importing ? 'Đang import...' : `📥 Import ${selected.size} SP`}
+                    </button>
+                  )}
                 </div>
-                {selected.size > 0 && (
-                  <button onClick={() => handleImport(products, selected)} disabled={importing}
-                    className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
-                    style={{ backgroundColor: '#E05B28' }}>
-                    {importing ? 'Đang import...' : `📥 Import ${selected.size} SP`}
-                  </button>
+                <div className="divide-y divide-[#F3F4F6]">
+                  {products.map((p: any) => {
+                    const rank = sorted.findIndex((s: any) => s.id === p.id) + 1
+                    return <ProductRow key={p.id} p={p} sel={selected}
+                      onToggle={id => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })}
+                      rank={rank} isTop3={top3Ids.has(p.id)} />
+                  })}
+                </div>
+
+                {totalCount > 20 && (
+                  <div className="px-5 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
+                    <span className="text-xs text-[#6B7280]">
+                      Trang {page} · Hiển thị {products.length}/{totalCount} sản phẩm
+                    </span>
+                    <div className="flex gap-2">
+                      {page > 1 && (
+                        <button onClick={() => fetchPage(page - 1)} disabled={loading}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-[#E5E7EB] hover:border-[#E05B28] hover:text-[#E05B28] disabled:opacity-50">
+                          ← Trang trước
+                        </button>
+                      )}
+                      <button onClick={() => fetchPage(page + 1)} disabled={loading || products.length < 20}
+                        className="px-3 py-1.5 text-xs rounded-lg text-white disabled:opacity-50"
+                        style={{ backgroundColor: '#E05B28' }}>
+                        Trang sau →
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="divide-y divide-[#F3F4F6]">
-                {products.map((p: any) => {
-                  const rank = sorted.findIndex((s: any) => s.id === p.id) + 1
-                  return <ProductRow key={p.id} p={p} sel={selected}
-                    onToggle={id => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })}
-                    rank={rank} isTop3={top3Ids.has(p.id)} />
-                })}
-              </div>
-
-              {/* Pagination */}
-              {totalCount > 20 && (
-                <div className="px-5 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
-                  <span className="text-xs text-[#6B7280]">
-                    Trang {page} · Hiển thị {products.length}/{totalCount} sản phẩm
-                  </span>
-                  <div className="flex gap-2">
-                    {page > 1 && (
-                      <button onClick={() => fetchPage(page - 1)} disabled={loading}
-                        className="px-3 py-1.5 text-xs rounded-lg border border-[#E5E7EB] hover:border-[#E05B28] hover:text-[#E05B28] disabled:opacity-50">
-                        ← Trang trước
-                      </button>
-                    )}
-                    <button onClick={() => fetchPage(page + 1)} disabled={loading || products.length < 20}
-                      className="px-3 py-1.5 text-xs rounded-lg text-white disabled:opacity-50"
-                      style={{ backgroundColor: '#E05B28' }}>
-                      Trang sau →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )
+          })()}
         </>
       )}
 
-      {/* ── Tab: Excel upload ── */}
       {tab === 'excel' && (
         <>
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-8 mb-5">
@@ -437,36 +476,44 @@ export default function ImportContent() {
             </div>
           </div>
 
-          {excelProducts.length > 0 && (
-            <div className="bg-white rounded-xl border border-[#E5E7EB] mb-5">
-              <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setExcelSelected(prev => prev.size === excelProducts.length ? new Set() : new Set(excelProducts.map(p => p.id)))}
-                    className="text-sm text-[#E05B28] font-medium hover:underline">
-                    {excelSelected.size === excelProducts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-                  </button>
-                  <span className="text-[#6B7280] text-sm">{excelProducts.length} sản phẩm từ Excel</span>
+          {excelProducts.length > 0 && (() => {
+            const newProducts = excelProducts.filter(p => !isDup(p))
+            const dupCount = excelProducts.length - newProducts.length
+            return (
+              <div className="bg-white rounded-xl border border-[#E5E7EB] mb-5">
+                <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button onClick={() => setExcelSelected(prev => prev.size === newProducts.length && newProducts.length > 0 ? new Set() : new Set(newProducts.map(p => p.id)))}
+                      className="text-sm text-[#E05B28] font-medium hover:underline">
+                      {excelSelected.size === newProducts.length && newProducts.length > 0 ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                    </button>
+                    <span className="text-[#6B7280] text-sm">{excelProducts.length} sản phẩm từ Excel</span>
+                    {dupCount > 0 && (
+                      <span className="text-xs bg-[#F3F4F6] text-[#6B7280] px-2 py-0.5 rounded-full">
+                        {dupCount} đã có trong hệ thống
+                      </span>
+                    )}
+                  </div>
+                  {excelSelected.size > 0 && (
+                    <button onClick={() => handleImport(excelProducts, excelSelected)} disabled={importing}
+                      className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
+                      style={{ backgroundColor: '#E05B28' }}>
+                      {importing ? 'Đang import...' : `📥 Import ${excelSelected.size} SP`}
+                    </button>
+                  )}
                 </div>
-                {excelSelected.size > 0 && (
-                  <button onClick={() => handleImport(excelProducts, excelSelected)} disabled={importing}
-                    className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
-                    style={{ backgroundColor: '#E05B28' }}>
-                    {importing ? 'Đang import...' : `📥 Import ${excelSelected.size} SP`}
-                  </button>
-                )}
+                <div className="divide-y divide-[#F3F4F6]">
+                  {excelProducts.map(p => (
+                    <ProductRow key={p.id} p={p} sel={excelSelected}
+                      onToggle={id => setExcelSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })} />
+                  ))}
+                </div>
               </div>
-              <div className="divide-y divide-[#F3F4F6]">
-                {excelProducts.map(p => (
-                  <ProductRow key={p.id} p={p} sel={excelSelected}
-                    onToggle={id => setExcelSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })} />
-                ))}
-              </div>
-            </div>
-          )}
+            )
+          })()}
         </>
       )}
 
-      {/* Imported queue */}
       {imported.length > 0 && (
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
           <h3 className="font-semibold text-[#111827] mb-3">✅ Đã import ({imported.length} sản phẩm)</h3>
