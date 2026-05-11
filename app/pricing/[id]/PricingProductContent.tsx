@@ -443,15 +443,20 @@ export default function PricingProductContent({ productId, currentUser }: Props)
           </div>
           <div className="flex flex-wrap gap-2">
             {photos.map((url, i) => (
-              <div key={i} className="w-16 h-16 rounded-lg border border-[#E5E7EB] overflow-hidden">
-                <img src={url} alt="" className="w-full h-full object-cover" />
+              <div key={i} className="relative w-16 h-16">
+                <img src={url} alt="" className="w-full h-full rounded-lg object-cover border border-[#E5E7EB]" />
+                <button
+                  type="button"
+                  onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+                >×</button>
               </div>
             ))}
             {photos.length < MAX_FILES && (
               <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5">
                 <span className="text-lg leading-none">🖼</span>
                 <span className="text-[9px]">Ảnh</span>
-                <input type="file" accept="image/*" multiple className="hidden"
+                <input type="file" accept="image/*,video/*" multiple className="hidden"
                   disabled={uploading}
                   onChange={e => {
                     if (e.target.files?.length) {
