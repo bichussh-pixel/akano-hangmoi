@@ -22,7 +22,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
   const [content, setContent] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
-  const [pendingMedia, setPendingMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
+  const [pendingMedia, setPendingMedia] = useState<Array<{ url: string; type: 'image' | 'video' }>>([])  
   const [hasUnread, setHasUnread] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -58,16 +58,21 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
   }, [messages])
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
     setUploadingMedia(true)
     try {
-      const fd = new FormData()
-      fd.append('image', file)
-      const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
-      const data = await res.json()
-      const isVideo = file.type.startsWith('video/')
-      setPendingMedia({ url: data.url, type: isVideo ? 'video' : 'image' })
+      const results = await Promise.all(files.map(async (file) => {
+        const fd = new FormData()
+        fd.append('image', file)
+        const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (!res.ok || data.error) return null
+        const isVideo = file.type.startsWith('video/')
+        return { url: data.url, type: isVideo ? 'video' : 'image' } as { url: string; type: 'image' | 'video' }
+      }))
+      const valid = results.filter(Boolean) as { url: string; type: 'image' | 'video' }[]
+      if (valid.length) setPendingMedia(prev => [...prev, ...valid])
     } finally {
       setUploadingMedia(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -76,18 +81,27 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if ((!content.trim() && !pendingMedia) || sending) return
+    if ((!content.trim() && !pendingMedia.length) || sending) return
     setSending(true)
     try {
-      const body: any = { content: content.trim() || '' }
-      if (pendingMedia) { body.mediaUrl = pendingMedia.url; body.mediaType = pendingMedia.type }
-      await fetch(`/api/products/${productId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      if (pendingMedia.length > 0) {
+        for (let i = 0; i < pendingMedia.length; i++) {
+          const m = pendingMedia[i]
+          await fetch(`/api/products/${productId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: i === 0 ? content.trim() : '', mediaUrl: m.url, mediaType: m.type }),
+          })
+        }
+      } else {
+        await fetch(`/api/products/${productId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: content.trim() }),
+        })
+      }
       setContent('')
-      setPendingMedia(null)
+      setPendingMedia([])
       markSeen()
       await fetchMessages()
     } finally {
@@ -150,23 +164,21 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
       </div>
 
       {/* Pending media preview */}
-      {pendingMedia && (
-        <div className="px-3 py-2 border-t border-[#E5E7EB] bg-[#F9FAFB] flex items-center gap-2">
-          {pendingMedia.type === 'image' ? (
-            <img src={pendingMedia.url} alt="" className="w-12 h-12 object-cover rounded-lg border border-[#E5E7EB]" />
-          ) : (
-            <video src={pendingMedia.url} className="w-12 h-12 object-cover rounded-lg border border-[#E5E7EB]" />
-          )}
-          <span className="text-xs text-[#6B7280] flex-1">
-            {pendingMedia.type === 'video' ? '🎥 Video đã chọn' : '🖼 Ảnh đã chọn'}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPendingMedia(null)}
-            className="text-xs text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
+      {pendingMedia.length > 0 && (
+        <div className="px-3 py-2 border-t border-[#E5E7EB] bg-[#F9FAFB] flex flex-wrap gap-2">
+          {pendingMedia.map((m, i) => (
+            <div key={i} className="relative">
+              {m.type === 'image'
+                ? <img src={m.url} alt="" className="w-12 h-12 object-cover rounded-lg border border-[#E5E7EB]" />
+                : <video src={m.url} className="w-12 h-12 object-cover rounded-lg border border-[#E5E7EB]" />
+              }
+              <button
+                type="button"
+                onClick={() => setPendingMedia(prev => prev.filter((_, j) => j !== i))}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+              >×</button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -181,6 +193,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
             ref={fileRef}
             type="file"
             accept="image/*,video/*"
+            multiple
             className="hidden"
             disabled={uploadingMedia || sending}
             onChange={handleMediaSelect}
@@ -194,7 +207,7 @@ export default function ChatBox({ productId, currentUser }: ChatBoxProps) {
         />
         <button
           type="submit"
-          disabled={sending || (!content.trim() && !pendingMedia)}
+          disabled={sending || (!content.trim() && !pendingMedia.length)}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 shrink-0"
           style={{ backgroundColor: '#E05B28' }}
         >
