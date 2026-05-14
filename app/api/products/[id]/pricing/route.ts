@@ -24,11 +24,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const body = await req.json()
   const {
-    factoryCny, weightKg, volumeM3, domesticFreightCny,
+    factoryCny,
+    // New per-box fields (replaced per-unit weightKg/volumeM3)
+    weightKgPerBox, volumeM3PerBox,
+    // Legacy per-unit fields (keep accepting for backward compat)
+    weightKg, volumeM3,
+    domesticFreightCny,
     inspectionCny, inspectionVnd, quarantineCny,
     qtyPerBox, supplierName, supplierContact, moq, leadTime,
-    pricingNotes, videoUrl, freightType,
+    pricingNotes, buyerNotes, videoUrl, freightType,
+    // Factory description fields
+    factoryMaterial, factoryWeightText, factoryDimensions,
   } = body
+
+  const qty = +qtyPerBox || 1
+
+  // Convert per-box to per-unit for calculation
+  const effectiveVolumeM3 = volumeM3PerBox != null
+    ? (+volumeM3PerBox || 0) / qty
+    : (+volumeM3 || 0)
+  const effectiveWeightKg = weightKgPerBox != null
+    ? (+weightKgPerBox || 0) / qty
+    : (+weightKg || 0)
 
   // Fetch daily rates for calculation
   const dailyRateDate = product.dailyRateDate
@@ -40,12 +57,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (rates && factoryCny) {
     const result = calculateLandedCost(
       {
-        factoryCny: +factoryCny, weightKg: +weightKg || 0, volumeM3: +volumeM3 || 0,
+        factoryCny: +factoryCny,
+        weightKg: effectiveWeightKg,
+        volumeM3: effectiveVolumeM3,
         domesticFreightCny: +domesticFreightCny || 0,
         inspectionCny: inspectionCny != null ? +inspectionCny : 0,
         inspectionVnd: inspectionVnd != null ? +inspectionVnd : 0,
         quarantineCny: quarantineCny != null ? +quarantineCny : 0,
-        qtyPerBox: +qtyPerBox || 1,
+        qtyPerBox: qty,
       },
       {
         fxRate: +rates.fxRate,
@@ -62,30 +81,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     pricingBreakdown = result.breakdown
   }
 
+  const commonFields = {
+    factoryCny: +factoryCny || 0,
+    weightKgPerBox: +weightKgPerBox || +weightKg || 0,
+    volumeM3PerBox: +volumeM3PerBox || +volumeM3 || 0,
+    weightKg: effectiveWeightKg,
+    volumeM3: effectiveVolumeM3,
+    domesticFreightCny: +domesticFreightCny || 0,
+    inspectionVnd: +inspectionVnd || 0,
+    quarantineCny: +quarantineCny || 0,
+    qtyPerBox: qty,
+    totalPerUnit, totalPerBox, pricingBreakdown,
+    supplierName: supplierName || '',
+    supplierContact: supplierContact || '',
+    moq: moq || '',
+    leadTime: leadTime || '',
+    pricingNotes: pricingNotes || '',
+    buyerNotes: buyerNotes || '',
+    videoUrl: videoUrl || '',
+    freightType: freightType || 'nguyen_xe',
+    factoryMaterial: factoryMaterial || '',
+    factoryWeightText: factoryWeightText || '',
+    factoryDimensions: factoryDimensions || '',
+  }
+
   await saveProduct(id, {
     status: 'pending_final',
-    factoryCny: +factoryCny || 0, weightKg: +weightKg || 0,
-    volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0,
-    inspectionVnd: +inspectionVnd || 0, quarantineCny: +quarantineCny || 0,
-    qtyPerBox: +qtyPerBox || 1,
-    totalPerUnit, totalPerBox, pricingBreakdown,
-    supplierName: supplierName || '', supplierContact: supplierContact || '',
-    moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
-    videoUrl: videoUrl || '', freightType: freightType || 'nguyen_xe',
-    pricedBy: user.id, pricedAt: Date.now(),
+    ...commonFields,
+    pricedBy: user.id,
+    pricedAt: Date.now(),
   })
 
-  // Also save to per-NV pricings collection
   const u = getUserById(user.id)
   await savePricing(id, user.id, {
-    factoryCny: +factoryCny || 0, weightKg: +weightKg || 0,
-    volumeM3: +volumeM3 || 0, domesticFreightCny: +domesticFreightCny || 0,
-    inspectionVnd: +inspectionVnd || 0, quarantineCny: +quarantineCny || 0,
-    qtyPerBox: +qtyPerBox || 1,
-    totalPerUnit, totalPerBox, pricingBreakdown,
-    supplierName: supplierName || '', supplierContact: supplierContact || '',
-    moq: moq || '', leadTime: leadTime || '', pricingNotes: pricingNotes || '',
-    photos: body.photos || [], videoUrl: videoUrl || '', freightType: freightType || 'nguyen_xe',
+    ...commonFields,
+    photos: body.photos || [],
+    videos: body.videos || [],
     pricedAt: Date.now(),
     userName: u?.name || user.name || '',
   })

@@ -13,45 +13,71 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!product) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json()
-  const { action, decision, assignedBuyerId, importQty, importWarehouse, rejectReason, newPrice } = body
+  const { action, decision, assignedBuyerId, importQtyHN, importQtySG, rejectReason, newPrice } = body
 
-  // Cancel a decided import (e.g. factory didn't ship)
+  // Cancel a decided import
   if (action === 'cancel') {
     await saveProduct(id, {
       status: 'rejected',
       rejectReason: rejectReason || 'Huỷ nhập — xưởng không phát hàng',
       decidedBy: user.id,
       decidedAt: Date.now(),
-      // clear import fields
       importQty: 0,
+      importQtyHN: 0,
+      importQtySG: 0,
       totalImportCost: 0,
+      totalImportCostHN: 0,
+      totalImportCostSG: 0,
       assignedBuyerId: '',
     })
     return NextResponse.json({ ok: true })
   }
 
-  // Edit price after deciding (factory price changed / NV reported wrong)
+  // Edit price after deciding — record in log
   if (action === 'edit_price') {
     const price = Number(newPrice)
     if (!price || price <= 0) return NextResponse.json({ error: 'Invalid price' }, { status: 400 })
-    const qty = product.importQty || 0
+    const oldPrice = product.totalPerUnit || 0
+    const qtyHN = product.importQtyHN || 0
+    const qtySG = product.importQtySG || 0
+    const totalQty = product.importQty || (qtyHN + qtySG)
+    const pricePerBox = price * (product.qtyPerBox || 1)
+    const existing = product.priceEditLog || []
     await saveProduct(id, {
       totalPerUnit: price,
-      totalImportCost: qty * price,
+      totalImportCost: totalQty * pricePerBox,
+      totalImportCostHN: qtyHN * pricePerBox,
+      totalImportCostSG: qtySG * pricePerBox,
+      priceEditLog: [
+        ...existing,
+        { oldPrice, newPrice: price, editedBy: user.id, editedAt: Date.now() },
+      ],
     })
     return NextResponse.json({ ok: true })
   }
 
   // Normal decide flow
   if (decision === 'import') {
-    const qty = parseInt(importQty) || 0
-    const totalImportCost = qty * (product.totalPerUnit || 0)
+    const qtyHN = parseInt(importQtyHN || '0') || 0
+    const qtySG = parseInt(importQtySG || '0') || 0
+    const totalQty = qtyHN + qtySG
+    const pricePerBox = (product.totalPerUnit || 0) * (product.qtyPerBox || 1)
+    const totalCostHN = qtyHN * pricePerBox
+    const totalCostSG = qtySG * pricePerBox
+    const totalImportCost = totalCostHN + totalCostSG
+
+    const warehouse = qtyHN > 0 && qtySG > 0 ? 'BOTH' : qtyHN > 0 ? 'HN' : 'SG'
+
     await saveProduct(id, {
       status: 'done',
       assignedBuyerId: assignedBuyerId || '',
-      importQty: qty,
-      importWarehouse: importWarehouse || 'HN',
+      importQty: totalQty,
+      importQtyHN: qtyHN,
+      importQtySG: qtySG,
+      importWarehouse: warehouse,
       totalImportCost,
+      totalImportCostHN: totalCostHN,
+      totalImportCostSG: totalCostSG,
       decidedBy: user.id,
       decidedAt: Date.now(),
     })

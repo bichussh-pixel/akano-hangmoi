@@ -119,12 +119,26 @@ export interface Product {
   // Step 5
   assignedBuyerId?: string
   importQty?: number
+  importQtyHN?: number
+  importQtySG?: number
   importWarehouse?: 'HN' | 'SG' | 'BOTH'
   totalImportCost?: number
+  totalImportCostHN?: number
+  totalImportCostSG?: number
   rejectReason?: string
   decidedBy?: string
   decidedAt?: number
   estimatedImportPrice?: number
+  priceEditLog?: { oldPrice: number; newPrice: number; editedBy: string; editedAt: number }[]
+  // New pricing fields (per-box)
+  weightKgPerBox?: number
+  volumeM3PerBox?: number
+  buyerNotes?: string
+  buyerRequestNotes?: string
+  factoryMaterial?: string
+  factoryWeightText?: string
+  factoryDimensions?: string
+  videos?: string[]
   // Step 6
   kiotCode?: string
   kiotCreatedAt?: number
@@ -173,7 +187,9 @@ export function fmtVND(n: number): string {
 export interface ProductPricing {
   factoryCny: number
   weightKg?: number
+  weightKgPerBox?: number
   volumeM3?: number
+  volumeM3PerBox?: number
   domesticFreightCny?: number
   inspectionCny?: number
   inspectionVnd?: number
@@ -187,7 +203,12 @@ export interface ProductPricing {
   moq?: string
   leadTime?: string
   pricingNotes?: string
+  buyerNotes?: string
+  factoryMaterial?: string
+  factoryWeightText?: string
+  factoryDimensions?: string
   photos?: string[]
+  videos?: string[]
   videoUrl?: string
   freightType?: string
   pricedAt: number

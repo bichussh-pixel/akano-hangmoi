@@ -8,7 +8,9 @@ interface PricingEntry {
   userName: string
   factoryCny: number
   weightKg?: number
+  weightKgPerBox?: number
   volumeM3?: number
+  volumeM3PerBox?: number
   domesticFreightCny?: number
   inspectionCny?: number
   qtyPerBox?: number
@@ -20,7 +22,12 @@ interface PricingEntry {
   moq?: string
   leadTime?: string
   pricingNotes?: string
+  buyerNotes?: string
+  factoryMaterial?: string
+  factoryWeightText?: string
+  factoryDimensions?: string
   photos?: string[]
+  videos?: string[]
   videoUrl?: string
   freightType?: string
   pricedAt: number
@@ -37,7 +44,6 @@ interface Product {
   imageUrl?: string
   kaloUrl?: string
   shopUrl?: string
-  description?: string
   specWeight?: string
   specDimensions?: string
   specMaterial?: string
@@ -49,6 +55,13 @@ interface Product {
   pricings: PricingEntry[]
 }
 
+interface PriceEditLog {
+  oldPrice: number
+  newPrice: number
+  editedBy: string
+  editedAt: number
+}
+
 interface DecidedProduct {
   id: string
   name: string
@@ -56,12 +69,17 @@ interface DecidedProduct {
   status: string
   totalPerUnit: number
   importQty: number
+  importQtyHN?: number
+  importQtySG?: number
   totalImportCost: number
+  totalImportCostHN?: number
+  totalImportCostSG?: number
   importWarehouse?: string
   decidedAt?: number
   assignedBuyerId?: string
   assignedBuyerName?: string
   rejectReason?: string
+  priceEditLog?: PriceEditLog[]
 }
 
 interface DecideContentProps {
@@ -94,13 +112,14 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [selectedPricing, setSelectedPricing] = useState<Record<string, string>>({})
+  const [showCompare, setShowCompare] = useState<Record<string, boolean>>({})
   const [decisions, setDecisions] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [toast, setToast] = useState('')
-  // cancel / edit state
   const [editPrice, setEditPrice] = useState<Record<string, string>>({})
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [editingPrice, setEditingPrice] = useState<string | null>(null)
+  const [showPriceLog, setShowPriceLog] = useState<string | null>(null)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -130,15 +149,29 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
     setDecisions(prev => ({ ...prev, [productId]: { ...(prev[productId] || {}), [field]: value } }))
   }
 
+  function calcTotalCost(activePricing: PricingEntry | undefined, d: any) {
+    if (!activePricing) return { hn: 0, sg: 0, total: 0 }
+    const pricePerBox = activePricing.totalPerBox || (activePricing.totalPerUnit * (activePricing.qtyPerBox || 1))
+    const qtyHN = parseInt(d.importQtyHN || '0') || 0
+    const qtySG = parseInt(d.importQtySG || '0') || 0
+    return {
+      hn: qtyHN * pricePerBox,
+      sg: qtySG * pricePerBox,
+      total: (qtyHN + qtySG) * pricePerBox,
+    }
+  }
+
   async function submitDecision(product: Product) {
     const d = decisions[product.id] || {}
     if (!d.decision) { showToast('Chọn quyết định trước'); return }
+    const activePricingUserId = selectedPricing[product.id] || (product.pricings[0]?.userId ?? '')
+    const activePricing = product.pricings.find(pr => pr.userId === activePricingUserId) || product.pricings[0]
     setSaving(product.id)
     try {
       const res = await fetch(`/api/products/${product.id}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(d),
+        body: JSON.stringify({ ...d, selectedPricingUserId: activePricingUserId }),
       })
       if (res.ok) {
         showToast(`Đã chốt: ${product.name}`)
@@ -242,6 +275,8 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
               const activePricingUserId = selectedPricing[product.id] || (pricings[0]?.userId ?? '')
               const activePricing = pricings.find(pr => pr.userId === activePricingUserId) || pricings[0]
               const bd = activePricing?.pricingBreakdown || {}
+              const isComparing = showCompare[product.id] && pricings.length > 1
+              const costs = calcTotalCost(activePricing, d)
 
               return (
                 <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
@@ -278,7 +313,6 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                             {(product.sales30d || 0) > 0 && <span>📦 <strong className="text-[#111827]">{(product.sales30d || 0).toLocaleString()}</strong> đơn/30 ngày</span>}
                             {(product.growthRate || 0) > 0 && <span className="text-green-600 font-semibold">+{Number(product.growthRate).toFixed(1)}%</span>}
                             {product.category && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{product.category}</span>}
-                            {product.importQty && <span>📦 SL nhập: <strong className="text-[#111827]">{product.importQty}</strong> thùng</span>}
                           </div>
                           <div className="flex gap-2 flex-wrap">
                             {getBestShopLink(product) && (
@@ -294,6 +328,7 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                           </div>
                         </div>
                       </div>
+
                       {(product.specWeight || product.specDimensions || product.specMaterial || product.specUseCases) && (
                         <div className="border-t border-[#E5E7EB] pt-3">
                           <div className="text-xs font-semibold text-[#6B7280] mb-2">📋 Thông số kỹ thuật</div>
@@ -306,27 +341,79 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                         </div>
                       )}
 
-                      {/* Per-NV pricing */}
+                      {/* Per-NV pricing — tab switcher or compare table */}
                       {pricings.length > 0 && (
                         <div>
                           {pricings.length > 1 && (
-                            <div className="flex gap-2 mb-3">
+                            <div className="flex gap-2 mb-3 flex-wrap">
                               {pricings.map(pr => (
                                 <button key={pr.userId}
-                                  onClick={() => setSelectedPricing(prev => ({ ...prev, [product.id]: pr.userId }))}
+                                  onClick={() => {
+                                    setSelectedPricing(prev => ({ ...prev, [product.id]: pr.userId }))
+                                    setShowCompare(prev => ({ ...prev, [product.id]: false }))
+                                  }}
                                   className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border"
                                   style={{
-                                    backgroundColor: activePricingUserId === pr.userId ? '#E05B28' : '#F3F4F6',
-                                    color: activePricingUserId === pr.userId ? 'white' : '#6B7280',
-                                    borderColor: activePricingUserId === pr.userId ? '#E05B28' : '#E5E7EB',
+                                    backgroundColor: activePricingUserId === pr.userId && !isComparing ? '#E05B28' : '#F3F4F6',
+                                    color: activePricingUserId === pr.userId && !isComparing ? 'white' : '#6B7280',
+                                    borderColor: activePricingUserId === pr.userId && !isComparing ? '#E05B28' : '#E5E7EB',
                                   }}>
                                   👤 {pr.userName}
                                 </button>
                               ))}
+                              <button
+                                onClick={() => setShowCompare(prev => ({ ...prev, [product.id]: !isComparing }))}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                                style={{
+                                  backgroundColor: isComparing ? '#4361EE' : '#EEF2FF',
+                                  color: isComparing ? 'white' : '#4361EE',
+                                  borderColor: isComparing ? '#4361EE' : '#C7D2FE',
+                                }}>
+                                ⚖️ So sánh
+                              </button>
                             </div>
                           )}
 
-                          {activePricing && (
+                          {/* Comparison table */}
+                          {isComparing ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-[#F9FAFB]">
+                                    <th className="text-left px-3 py-2 text-[#6B7280] font-medium border border-[#E5E7EB]">Tiêu chí</th>
+                                    {pricings.map(pr => (
+                                      <th key={pr.userId} className="text-center px-3 py-2 text-[#111827] font-semibold border border-[#E5E7EB]">
+                                        {pr.userName}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[
+                                    { label: 'Giá xuất xưởng (CNY)', key: (pr: PricingEntry) => `${pr.factoryCny} CNY` },
+                                    { label: 'Tổng/chiếc', key: (pr: PricingEntry) => <strong style={{ color: '#E05B28' }}>{fmt(pr.totalPerUnit)}</strong> },
+                                    { label: 'Tổng/thùng', key: (pr: PricingEntry) => pr.totalPerBox ? fmt(pr.totalPerBox) : '—' },
+                                    { label: 'Số lượng/thùng', key: (pr: PricingEntry) => pr.qtyPerBox ? `${pr.qtyPerBox} cái` : '—' },
+                                    { label: 'MOQ', key: (pr: PricingEntry) => pr.moq || '—' },
+                                    { label: 'Lead time', key: (pr: PricingEntry) => pr.leadTime || '—' },
+                                    { label: 'Loại vận chuyển', key: (pr: PricingEntry) => pr.freightType === 'nguyen_xe' ? 'Nguyên Xe' : pr.freightType === 'ghep_xe' ? 'Ghép Xe' : '—' },
+                                    { label: 'Chất liệu xưởng', key: (pr: PricingEntry) => pr.factoryMaterial || '—' },
+                                    { label: 'KT xưởng', key: (pr: PricingEntry) => pr.factoryDimensions || '—' },
+                                    { label: 'NCC', key: (pr: PricingEntry) => pr.supplierName || '—' },
+                                  ].map(row => (
+                                    <tr key={row.label} className="hover:bg-[#FAFAFA]">
+                                      <td className="px-3 py-1.5 text-[#6B7280] border border-[#E5E7EB]">{row.label}</td>
+                                      {pricings.map(pr => (
+                                        <td key={pr.userId} className="text-center px-3 py-1.5 border border-[#E5E7EB]">
+                                          {row.key(pr) as any}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : activePricing && (
                             <div className="space-y-4">
                               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: '#FFF3EE' }}>
                                 <span className="text-base">👤</span>
@@ -360,6 +447,18 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                                 )}
                               </div>
 
+                              {/* Factory description */}
+                              {(activePricing.factoryMaterial || activePricing.factoryDimensions || activePricing.factoryWeightText) && (
+                                <div className="bg-[#F9FAFB] rounded-xl p-4 text-xs">
+                                  <h4 className="text-sm font-semibold text-[#111827] mb-2">Mô tả từ xưởng</h4>
+                                  <div className="grid grid-cols-2 gap-2 text-[#374151]">
+                                    {activePricing.factoryMaterial && <div><span className="text-[#6B7280]">Chất liệu:</span> {activePricing.factoryMaterial}</div>}
+                                    {activePricing.factoryWeightText && <div><span className="text-[#6B7280]">Trọng lượng:</span> {activePricing.factoryWeightText}</div>}
+                                    {activePricing.factoryDimensions && <div className="col-span-2"><span className="text-[#6B7280]">Kích thước:</span> {activePricing.factoryDimensions}</div>}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Supplier info */}
                               {(activePricing.supplierName || activePricing.supplierContact || activePricing.moq || activePricing.leadTime) && (
                                 <div className="bg-[#F9FAFB] rounded-xl p-4 text-xs">
@@ -370,7 +469,8 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                                     {activePricing.moq && <div><span className="text-[#6B7280]">MOQ:</span> {activePricing.moq}</div>}
                                     {activePricing.leadTime && <div><span className="text-[#6B7280]">Lead:</span> {activePricing.leadTime}</div>}
                                   </div>
-                                  {activePricing.pricingNotes && <p className="mt-2 text-[#374151]">{activePricing.pricingNotes}</p>}
+                                  {activePricing.buyerNotes && <p className="mt-2 text-[#374151]"><span className="text-[#6B7280]">Ghi chú buyer:</span> {activePricing.buyerNotes}</p>}
+                                  {activePricing.pricingNotes && <p className="mt-1 text-[#374151]"><span className="text-[#6B7280]">Ghi chú báo giá:</span> {activePricing.pricingNotes}</p>}
                                 </div>
                               )}
 
@@ -379,14 +479,28 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                                 <div>
                                   <p className="text-xs font-semibold text-[#6B7280] mb-2">🖼️ Ảnh sản phẩm</p>
                                   <div className="flex flex-wrap gap-2">
-                                    {activePricing.photos!.map((url, i) => {
-                                      const isVid = url.match(/\.(mp4|mov|webm)(\.\?|$)/i) || url.startsWith('data:video/')
-                                      return (
-                                        <div key={i} className="w-16 h-16 rounded-lg border overflow-hidden bg-black relative">
-                                          {isVid ? <><video src={url} className="w-full h-full object-cover" /><div className="absolute inset-0 flex items-center justify-center"><span className="text-white text-lg">▶</span></div></> : <img src={url} alt="" className="w-full h-full object-cover" />}
+                                    {activePricing.photos!.map((url, i) => (
+                                      <div key={i} className="w-16 h-16 rounded-lg border overflow-hidden bg-[#F9FAFB]">
+                                        <img src={url} alt="" className="w-full h-full object-cover" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Videos */}
+                              {(activePricing.videos || []).length > 0 && (
+                                <div>
+                                  <p className="text-xs font-semibold text-[#6B7280] mb-2">🎥 Video</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {activePricing.videos!.map((url, i) => (
+                                      <div key={i} className="w-20 h-16 rounded-lg border overflow-hidden bg-black relative">
+                                        <video src={url} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                          <span className="text-white text-lg">▶</span>
                                         </div>
-                                      )
-                                    })}
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               )}
@@ -443,31 +557,42 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                                 ))}
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                            {/* Per-warehouse quantity */}
+                            <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="text-xs font-medium text-[#6B7280] mb-1 block">Số lượng (thùng)</label>
-                                <input type="number" value={d.importQty || ''}
-                                  onChange={e => updateDecision(product.id, 'importQty', e.target.value)}
+                                <label className="text-xs font-medium text-[#6B7280] mb-1 block">SL nhập kho HN (thùng)</label>
+                                <input type="number" min="0" value={d.importQtyHN || ''}
+                                  onChange={e => updateDecision(product.id, 'importQtyHN', e.target.value)}
                                   className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none" />
                               </div>
                               <div>
-                                <label className="text-xs font-medium text-[#6B7280] mb-1 block">Kho nhập</label>
-                                <div className="flex gap-2">
-                                  {['HN', 'SG', 'BOTH'].map(wh => (
-                                    <button key={wh}
-                                      onClick={() => updateDecision(product.id, 'importWarehouse', wh)}
-                                      className="flex-1 py-2 rounded-lg text-xs font-semibold"
-                                      style={{ backgroundColor: d.importWarehouse === wh ? '#E05B28' : '#F3F4F6', color: d.importWarehouse === wh ? 'white' : '#6B7280' }}>
-                                      {wh}
-                                    </button>
-                                  ))}
-                                </div>
+                                <label className="text-xs font-medium text-[#6B7280] mb-1 block">SL nhập kho SG (thùng)</label>
+                                <input type="number" min="0" value={d.importQtySG || ''}
+                                  onChange={e => updateDecision(product.id, 'importQtySG', e.target.value)}
+                                  className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none" />
                               </div>
                             </div>
-                            {d.importQty && activePricing && (
-                              <div className="bg-[#FFF3EE] rounded-lg p-3 text-sm">
-                                <span className="text-[#6B7280]">Tổng tiền nhập: </span>
-                                <strong style={{ color: '#E05B28' }}>{fmt(activePricing.totalPerUnit * Number(d.importQty) * (activePricing.qtyPerBox || 1))}</strong>
+
+                            {/* Cost preview per warehouse */}
+                            {(d.importQtyHN || d.importQtySG) && activePricing && (
+                              <div className="bg-[#FFF3EE] rounded-lg p-3 text-xs space-y-1">
+                                {costs.hn > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-[#6B7280]">Kho HN ({d.importQtyHN} thùng):</span>
+                                    <strong style={{ color: '#E05B28' }}>{fmt(costs.hn)}</strong>
+                                  </div>
+                                )}
+                                {costs.sg > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-[#6B7280]">Kho SG ({d.importQtySG} thùng):</span>
+                                    <strong style={{ color: '#E05B28' }}>{fmt(costs.sg)}</strong>
+                                  </div>
+                                )}
+                                <div className="flex justify-between pt-1 border-t border-orange-200 font-semibold text-sm">
+                                  <span>Tổng tiền nhập:</span>
+                                  <span style={{ color: '#E05B28' }}>{fmt(costs.total)}</span>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -522,17 +647,36 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                       {p.status === 'done' ? '✅ Nhập' : '❌ Không'}
                     </span>
                   </div>
-                  <div className="text-xs text-[#6B7280] flex flex-wrap gap-3">
+                  <div className="text-xs text-[#6B7280] flex flex-wrap gap-3 mb-2">
                     {p.decidedAt && <span>📅 {new Date(p.decidedAt).toLocaleDateString('vi-VN')}</span>}
                     {p.assignedBuyerName && <span>👤 {p.assignedBuyerName}</span>}
                     {p.totalPerUnit > 0 && <span>💰 {fmt(p.totalPerUnit)}/chiếc</span>}
-                    {p.importQty > 0 && <span>📦 {p.importQty} thùng</span>}
-                    {p.totalImportCost > 0 && <span className="font-semibold" style={{ color: '#E05B28' }}>💵 {fmt(p.totalImportCost)}</span>}
-                    {p.importWarehouse && <span>🏢 {p.importWarehouse}</span>}
                     {p.rejectReason && <span>📝 {p.rejectReason}</span>}
                   </div>
+
+                  {/* Per-warehouse breakdown */}
                   {p.status === 'done' && (
-                    <div className="flex gap-2 mt-3 flex-wrap">
+                    <div className="text-xs flex flex-wrap gap-3 mb-2">
+                      {(p.importQtyHN || 0) > 0 && (
+                        <span className="px-2 py-1 rounded" style={{ backgroundColor: '#EFF6FF' }}>
+                          🏢 HN: <strong>{p.importQtyHN} thùng</strong>
+                          {p.totalImportCostHN ? <span className="ml-1 text-blue-600">{fmt(p.totalImportCostHN)}</span> : null}
+                        </span>
+                      )}
+                      {(p.importQtySG || 0) > 0 && (
+                        <span className="px-2 py-1 rounded" style={{ backgroundColor: '#F0FDF4' }}>
+                          🏢 SG: <strong>{p.importQtySG} thùng</strong>
+                          {p.totalImportCostSG ? <span className="ml-1 text-green-600">{fmt(p.totalImportCostSG)}</span> : null}
+                        </span>
+                      )}
+                      {p.totalImportCost > 0 && (
+                        <span className="font-semibold" style={{ color: '#E05B28' }}>💵 Tổng: {fmt(p.totalImportCost)}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {p.status === 'done' && (
+                    <div className="flex gap-2 mt-2 flex-wrap">
                       <div className="flex gap-1 flex-1 min-w-[160px]">
                         <input type="number" placeholder="Sửa giá/chiếc"
                           value={editPrice[p.id] || ''}
@@ -546,6 +690,14 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                           {editingPrice === p.id ? '...' : '✏️ Sửa giá'}
                         </button>
                       </div>
+                      {(p.priceEditLog || []).length > 0 && (
+                        <button
+                          onClick={() => setShowPriceLog(showPriceLog === p.id ? null : p.id)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                          📋 Lịch sử ({p.priceEditLog!.length})
+                        </button>
+                      )}
                       <button
                         onClick={() => cancelImport(p)}
                         disabled={cancelling === p.id}
@@ -553,6 +705,26 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                         style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
                         {cancelling === p.id ? '...' : '🚫 Huỷ nhập'}
                       </button>
+                    </div>
+                  )}
+
+                  {/* Price edit log */}
+                  {showPriceLog === p.id && (p.priceEditLog || []).length > 0 && (
+                    <div className="mt-3 border border-[#E5E7EB] rounded-lg overflow-hidden">
+                      <div className="bg-[#F9FAFB] px-3 py-2 text-xs font-semibold text-[#6B7280]">Lịch sử sửa giá</div>
+                      <div className="divide-y divide-[#F3F4F6]">
+                        {p.priceEditLog!.map((log, i) => (
+                          <div key={i} className="px-3 py-2 text-xs flex justify-between items-center">
+                            <span className="text-[#6B7280]">
+                              {new Date(log.editedAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span>
+                              <span className="text-[#9CA3AF] line-through mr-2">{fmt(log.oldPrice)}</span>
+                              <span className="font-semibold" style={{ color: '#E05B28' }}>{fmt(log.newPrice)}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

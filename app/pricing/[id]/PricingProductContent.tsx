@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, Component } from 'react'
+import { useEffect, useState, Component } from 'react'
 import { useRouter } from 'next/navigation'
 import { calculateLandedCost } from '@/lib/calc'
 import ChatBox from '@/components/ui/ChatBox'
@@ -38,6 +38,7 @@ interface Product {
   specDimensions?: string
   specMaterial?: string
   specUseCases?: string
+  buyerRequestNotes?: string
   dailyRate?: DailyRate
   exportTaxPct?: number
   importTaxPct?: number
@@ -66,7 +67,8 @@ function calcImportRange(marketPrice: number) {
   return { min, max }
 }
 
-const MAX_FILES = 10
+const MAX_PHOTOS = 10
+const MAX_VIDEOS = 5
 
 interface Props {
   productId: string
@@ -82,11 +84,10 @@ export default function PricingProductContent({ productId, currentUser }: Props)
   const [form, setForm] = useState<Record<string, any>>({})
   const [freightType, setFreightType] = useState<'nguyen_xe' | 'ghep_xe'>('nguyen_xe')
   const [photos, setPhotos] = useState<string[]>([])
+  const [videos, setVideos] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
-
-  const videoUrlRef = useRef<HTMLInputElement>(null)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -110,17 +111,19 @@ export default function PricingProductContent({ productId, currentUser }: Props)
   }
 
   function getCalc() {
-    if (!product?.dailyRate || !form.factoryCny || !form.volumeM3 || !form.qtyPerBox) return null
+    if (!product?.dailyRate || !form.factoryCny || !form.volumeM3PerBox || !form.qtyPerBox) return null
+    const qty = Number(form.qtyPerBox)
+    if (!qty) return null
     try {
       return calculateLandedCost(
         {
           factoryCny: Number(form.factoryCny),
-          weightKg: Number(form.weightKg || 0),
-          volumeM3: Number(form.volumeM3 || 0),
+          weightKg: Number(form.weightKgPerBox || 0) / qty,
+          volumeM3: Number(form.volumeM3PerBox || 0) / qty,
           domesticFreightCny: Number(form.domesticFreightCny || 0),
           inspectionVnd: Number(form.inspectionVnd || 0),
           quarantineCny: Number(form.quarantineCny || 0),
-          qtyPerBox: Number(form.qtyPerBox),
+          qtyPerBox: qty,
         },
         {
           fxRate: Number(product.dailyRate.fxRate),
@@ -136,33 +139,43 @@ export default function PricingProductContent({ productId, currentUser }: Props)
   }
 
   async function uploadMedia(fileArr: File[]) {
-    const currentCount = photos.length
-    if (currentCount + fileArr.length > MAX_FILES) {
-      showToast(`Tối đa ${MAX_FILES} ảnh. Chỉ còn ${MAX_FILES - currentCount} chỗ.`)
-      fileArr = fileArr.slice(0, MAX_FILES - currentCount)
-      if (!fileArr.length) return
-    }
+    const photoFiles = fileArr.filter(f => f.type.startsWith('image/'))
+    const videoFiles = fileArr.filter(f => f.type.startsWith('video/'))
+
+    const availPhotos = MAX_PHOTOS - photos.length
+    const availVideos = MAX_VIDEOS - videos.length
+
+    const photosToUpload = photoFiles.slice(0, availPhotos)
+    const videosToUpload = videoFiles.slice(0, availVideos)
+
+    if (photoFiles.length > availPhotos) showToast(`Chỉ còn ${availPhotos} chỗ ảnh. Đã bỏ qua ${photoFiles.length - availPhotos} ảnh.`)
+    if (videoFiles.length > availVideos) showToast(`Chỉ còn ${availVideos} chỗ video. Đã bỏ qua ${videoFiles.length - availVideos} video.`)
+
+    const allToUpload = [...photosToUpload, ...videosToUpload]
+    if (!allToUpload.length) return
+
     setUploading(true)
     try {
-      const results = await Promise.all(fileArr.map(async file => {
+      const results = await Promise.all(allToUpload.map(async file => {
         const fd = new FormData()
         fd.append('image', file)
         try {
           const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
           const data = await res.json()
           if (data.error === 'VIDEO_NO_STORAGE') {
-            showToast('Video quá lớn để lưu trực tiếp. Hãy dán link video vào ô URL video bên dưới.')
-            setTimeout(() => videoUrlRef.current?.focus(), 100)
+            showToast('Video quá lớn — cần cấu hình Vercel Blob để lưu video.')
             return null
           }
           if (!res.ok || data.error) { showToast(data.error || 'Lỗi upload'); return null }
-          return data.url as string
+          return { url: data.url as string, isVideo: file.type.startsWith('video/') }
         } catch { showToast('Lỗi kết nối'); return null }
       }))
-      const urls = results.filter(Boolean) as string[]
-      if (urls.length) {
-        setPhotos(prev => [...prev, ...urls])
-        await Promise.all(urls.map(url =>
+      const uploaded = results.filter(Boolean) as { url: string; isVideo: boolean }[]
+      const newPhotos = uploaded.filter(r => !r.isVideo).map(r => r.url)
+      const newVideos = uploaded.filter(r => r.isVideo).map(r => r.url)
+      if (newPhotos.length) {
+        setPhotos(prev => [...prev, ...newPhotos])
+        await Promise.all(newPhotos.map(url =>
           fetch(`/api/products/${productId}/photos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -170,11 +183,12 @@ export default function PricingProductContent({ productId, currentUser }: Props)
           })
         ))
       }
+      if (newVideos.length) setVideos(prev => [...prev, ...newVideos])
     } finally { setUploading(false) }
   }
 
   async function submit() {
-    if (!product || !form.factoryCny || !form.volumeM3 || !form.qtyPerBox) return
+    if (!product || !form.factoryCny || !form.volumeM3PerBox || !form.qtyPerBox) return
     setSaving(true)
     try {
       const res = await fetch(`/api/products/${productId}/pricing`, {
@@ -184,6 +198,7 @@ export default function PricingProductContent({ productId, currentUser }: Props)
           ...form,
           freightType,
           photos,
+          videos,
         }),
       })
       if (!res.ok) { showToast('Lỗi khi gửi báo giá'); setSaving(false); return }
@@ -213,6 +228,7 @@ export default function PricingProductContent({ productId, currentUser }: Props)
   const calc = getCalc()
   const dr = product.dailyRate
   const importRange = product.marketPrice > 0 ? calcImportRange(product.marketPrice) : null
+  const canSubmit = !saving && !!form.factoryCny && !!form.volumeM3PerBox && !!form.qtyPerBox
 
   return (
     <div className="max-w-2xl mx-auto pb-10">
@@ -249,7 +265,7 @@ export default function PricingProductContent({ productId, currentUser }: Props)
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs mb-2">
                 <span className={product.specWeight ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
-                  🏐 {product.specWeight || 'Chưa nhập cân nặng'}
+                  🏋️ {product.specWeight || 'Chưa nhập cân nặng'}
                 </span>
                 <span className={product.specDimensions ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
                   📐 {product.specDimensions || 'Chưa nhập kích thước'}
@@ -286,6 +302,14 @@ export default function PricingProductContent({ productId, currentUser }: Props)
                 {fmt(importRange.min)} – {fmt(importRange.max)}
               </span>
               <span className="text-xs text-[#6B7280] ml-1">(45–60% giá TT × 0.83/1.08)</span>
+            </div>
+          )}
+
+          {/* Buyer request notes */}
+          {product.buyerRequestNotes && (
+            <div className="mt-3 rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
+              <span className="font-semibold text-amber-700">📝 Ghi chú từ Admin:</span>
+              <p className="mt-1 text-amber-900 text-xs">{product.buyerRequestNotes}</p>
             </div>
           )}
         </div>
@@ -339,12 +363,12 @@ export default function PricingProductContent({ productId, currentUser }: Props)
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { key: 'factoryCny', label: 'Giá xuất xưởng (CNY/chiếc)', required: true },
-              { key: 'weightKg', label: 'Cân nặng (kg/chiếc)' },
-              { key: 'volumeM3', label: 'Số khối/chiếc (m³)', required: true },
+              { key: 'qtyPerBox', label: 'Số lượng/thùng (chiếc)', required: true },
+              { key: 'weightKgPerBox', label: 'Cân nặng/thùng (kg)' },
+              { key: 'volumeM3PerBox', label: 'Số khối/thùng (m³)', required: true },
               { key: 'domesticFreightCny', label: 'Cước nội địa TQ (CNY/chiếc)' },
               { key: 'inspectionVnd', label: 'Phí kiểm định (VND/chiếc)' },
               { key: 'quarantineCny', label: 'Phí kiểm dịch (tệ/chiếc)' },
-              { key: 'qtyPerBox', label: 'Số lượng/thùng', required: true },
             ].map(field => (
               <div key={field.key}>
                 <label className="text-xs font-medium text-[#6B7280] mb-1 block">
@@ -392,6 +416,29 @@ export default function PricingProductContent({ productId, currentUser }: Props)
           )}
         </div>
 
+        {/* Factory description */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
+          <h3 className="text-sm font-semibold text-[#111827] mb-3">Mô tả sản phẩm từ xưởng</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { key: 'factoryMaterial', label: 'Chất liệu', type: 'text' },
+              { key: 'factoryWeightText', label: 'Trọng lượng (mô tả)', type: 'text' },
+              { key: 'factoryDimensions', label: 'Kích thước', type: 'text' },
+            ].map(field => (
+              <div key={field.key}>
+                <label className="text-xs font-medium text-[#6B7280] mb-1 block">{field.label}</label>
+                <input
+                  type={field.type}
+                  value={form[field.key] ?? ''}
+                  onChange={e => update(field.key, e.target.value)}
+                  placeholder="VD: nhựa ABS, 250g/thùng, 30×20×15cm"
+                  className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Supplier info */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
           <h3 className="text-sm font-semibold text-[#111827] mb-3">Thông tin nhà cung cấp</h3>
@@ -414,6 +461,16 @@ export default function PricingProductContent({ productId, currentUser }: Props)
             ))}
           </div>
           <div className="mt-3">
+            <label className="text-xs font-medium text-[#6B7280] mb-1 block">Ghi chú của buyer</label>
+            <textarea
+              rows={2}
+              value={form.buyerNotes ?? ''}
+              onChange={e => update('buyerNotes', e.target.value)}
+              placeholder="Ghi chú thêm từ NVMH..."
+              className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
+            />
+          </div>
+          <div className="mt-3">
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">Ghi chú báo giá</label>
             <textarea
               rows={2}
@@ -422,52 +479,75 @@ export default function PricingProductContent({ productId, currentUser }: Props)
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
             />
           </div>
-          <div className="mt-3">
-            <label className="text-xs font-medium text-[#6B7280] mb-1 block">URL video</label>
-            <input
-              ref={videoUrlRef}
-              type="text"
-              value={form.videoUrl ?? ''}
-              onChange={e => update('videoUrl', e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
-            />
-          </div>
         </div>
 
-        {/* Photos */}
+        {/* Photos & Videos */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-[#111827]">🖼️ Ảnh sản phẩm</h3>
-            <span className="text-xs text-[#9CA3AF]">{photos.length}/{MAX_FILES}</span>
+            <h3 className="text-sm font-semibold text-[#111827]">🖼️ Ảnh & Video</h3>
+            <div className="flex gap-3 text-xs text-[#9CA3AF]">
+              <span>Ảnh {photos.length}/{MAX_PHOTOS}</span>
+              <span>Video {videos.length}/{MAX_VIDEOS}</span>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {photos.map((url, i) => (
-              <div key={i} className="relative w-16 h-16">
-                <img src={url} alt="" className="w-full h-full rounded-lg object-cover border border-[#E5E7EB]" />
-                <button
-                  type="button"
-                  onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
-                >×</button>
+
+          {/* Photos row */}
+          {(photos.length > 0 || true) && (
+            <div className="mb-3">
+              <p className="text-xs text-[#6B7280] mb-2 font-medium">Ảnh</p>
+              <div className="flex flex-wrap gap-2">
+                {photos.map((url, i) => (
+                  <div key={i} className="relative w-16 h-16">
+                    <img src={url} alt="" className="w-full h-full rounded-lg object-cover border border-[#E5E7EB]" />
+                    <button
+                      type="button"
+                      onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+                    >×</button>
+                  </div>
+                ))}
+                {photos.length < MAX_PHOTOS && (
+                  <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5">
+                    <span className="text-lg leading-none">🖼</span>
+                    <span className="text-[9px]">Thêm</span>
+                    <input type="file" accept="image/*,video/*" multiple className="hidden"
+                      disabled={uploading}
+                      onChange={e => {
+                        if (e.target.files?.length) {
+                          uploadMedia(Array.from(e.target.files))
+                          e.target.value = ''
+                        }
+                      }} />
+                  </label>
+                )}
               </div>
-            ))}
-            {photos.length < MAX_FILES && (
-              <label className="w-16 h-16 rounded-lg border-2 border-dashed border-[#E5E7EB] flex flex-col items-center justify-center cursor-pointer hover:border-[#E05B28] text-[#6B7280] gap-0.5">
-                <span className="text-lg leading-none">🖼</span>
-                <span className="text-[9px]">Ảnh</span>
-                <input type="file" accept="image/*,video/*" multiple className="hidden"
-                  disabled={uploading}
-                  onChange={e => {
-                    if (e.target.files?.length) {
-                      uploadMedia(Array.from(e.target.files))
-                      e.target.value = ''
-                    }
-                  }} />
-              </label>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Videos row */}
+          {videos.length > 0 && (
+            <div>
+              <p className="text-xs text-[#6B7280] mb-2 font-medium">Video</p>
+              <div className="flex flex-wrap gap-2">
+                {videos.map((url, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg border overflow-hidden bg-black">
+                    <video src={url} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-white text-lg">▶</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVideos(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {uploading && <p className="text-xs text-[#E05B28] animate-pulse mt-2">⏳ Đang tải lên...</p>}
+          <p className="text-[10px] text-[#9CA3AF] mt-2">Chọn nhiều file cùng lúc — ảnh và video đều được</p>
         </div>
 
         {/* Chat */}
@@ -481,7 +561,7 @@ export default function PricingProductContent({ productId, currentUser }: Props)
         <button
           type="button"
           onClick={submit}
-          disabled={saving || !form.factoryCny || !form.volumeM3 || !form.qtyPerBox}
+          disabled={!canSubmit}
           className="w-full py-3 rounded-xl text-white font-semibold disabled:opacity-50"
           style={{ backgroundColor: '#E05B28' }}
         >

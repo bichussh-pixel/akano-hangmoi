@@ -32,7 +32,9 @@ export async function GET() {
         userName: u?.name || p.pricedBy,
         factoryCny: p.factoryCny || 0,
         weightKg: p.weightKg,
+        weightKgPerBox: p.weightKgPerBox,
         volumeM3: p.volumeM3 || 0,
+        volumeM3PerBox: p.volumeM3PerBox,
         domesticFreightCny: p.domesticFreightCny,
         inspectionCny: p.inspectionCny,
         qtyPerBox: p.qtyPerBox,
@@ -44,7 +46,12 @@ export async function GET() {
         moq: p.moq || '',
         leadTime: p.leadTime || '',
         pricingNotes: p.pricingNotes || '',
+        buyerNotes: p.buyerNotes || '',
+        factoryMaterial: p.factoryMaterial || '',
+        factoryWeightText: p.factoryWeightText || '',
+        factoryDimensions: p.factoryDimensions || '',
         photos: p.photos || [],
+        videos: p.videos || [],
         videoUrl: p.videoUrl || '',
         freightType: p.freightType,
         pricedAt: p.pricedAt || Date.now(),
@@ -53,7 +60,7 @@ export async function GET() {
     return { ...p, assignedBuyers: buyers, pricings }
   }))
 
-  // Enrich decided products with buyer name
+  // Enrich decided products with buyer name and new warehouse fields
   const allUsers = USERS
   const miniDecided = [...doneProducts, ...rejectedProducts].map(p => {
     const buyer = allUsers.find(u => u.id === p.assignedBuyerId)
@@ -64,12 +71,17 @@ export async function GET() {
       status: p.status,
       totalPerUnit: p.totalPerUnit || 0,
       importQty: p.importQty || 0,
+      importQtyHN: p.importQtyHN || 0,
+      importQtySG: p.importQtySG || 0,
       totalImportCost: p.totalImportCost || 0,
+      totalImportCostHN: p.totalImportCostHN || 0,
+      totalImportCostSG: p.totalImportCostSG || 0,
       importWarehouse: p.importWarehouse,
       decidedAt: p.decidedAt,
       assignedBuyerId: p.assignedBuyerId,
       assignedBuyerName: buyer?.name || '',
       rejectReason: p.rejectReason || '',
+      priceEditLog: (p as any).priceEditLog || [],
     }
   }).sort((a, b) => (b.decidedAt || 0) - (a.decidedAt || 0))
 
