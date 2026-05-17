@@ -26,16 +26,20 @@ export async function GET() {
     }
   }
 
-  if (productIds.length === 0) return NextResponse.json({ count: 0 })
+  if (productIds.length === 0) return NextResponse.json({ count: 0, productIds: [] })
 
   // Count products with messages in last 2 hours from OTHER users
   const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000
   let count = 0
+  const newProductIds: string[] = []
   for (const pid of productIds) {
     const msgs = await getMessages(pid)
     const hasNew = msgs.some(m => m.createdAt > twoHoursAgo && m.senderId !== user.id)
-    if (hasNew) count++
+    if (hasNew) {
+      count++
+      newProductIds.push(pid)
+    }
   }
 
-  return NextResponse.json({ count })
+  return NextResponse.json({ count, productIds: newProductIds })
 }

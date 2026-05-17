@@ -122,7 +122,9 @@ export default function ImportsContent() {
                 <tr className="text-xs text-[#6B7280] bg-[#F9FAFB]">
                   <th className="text-left px-4 py-2 font-medium">Mã check</th>
                   <th className="text-left px-4 py-2 font-medium">Tên sản phẩm</th>
+                  <th className="text-left px-4 py-2 font-medium">Mã Kiot</th>
                   <th className="text-right px-4 py-2 font-medium">Giá/chiếc</th>
+                  <th className="text-right px-4 py-2 font-medium">Quy cách</th>
                   <th className="text-right px-4 py-2 font-medium">SL (thùng)</th>
                   <th className="text-right px-4 py-2 font-medium">Tổng tiền</th>
                   <th className="text-left px-4 py-2 font-medium">NVMH</th>
@@ -139,7 +141,14 @@ export default function ImportsContent() {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-[#111827] max-w-[200px] truncate">{p.name}</td>
+                    <td className="px-4 py-3">
+                      {p.kiotCode
+                        ? <span className="text-xs font-mono font-bold px-2 py-0.5 rounded" style={{ background: '#EEF2FF', color: '#4361EE' }}>{p.kiotCode}</span>
+                        : <span className="text-[#9CA3AF]">—</span>
+                      }
+                    </td>
                     <td className="px-4 py-3 text-right text-[#374151]">{fmt(p.totalPerUnit)}</td>
+                    <td className="px-4 py-3 text-right text-[#374151]">{p.qtyPerBox || 1} chiếc</td>
                     <td className="px-4 py-3 text-right text-[#374151]">{p.importQty}</td>
                     <td className="px-4 py-3 text-right font-semibold" style={{ color: '#E05B28' }}>{fmt(p.totalImportCost)}</td>
                     <td className="px-4 py-3 text-[#374151]">{p.assignedBuyerName || '—'}</td>
@@ -150,7 +159,7 @@ export default function ImportsContent() {
               </tbody>
               <tfoot>
                 <tr className="bg-[#FFF3EE] font-semibold">
-                  <td className="px-4 py-2 text-xs" colSpan={4} style={{ color: '#E05B28' }}>TỔNG CỘNG ({filtered.length} mã)</td>
+                  <td className="px-4 py-2 text-xs" colSpan={6} style={{ color: '#E05B28' }}>TỔNG CỘNG ({filtered.length} mã)</td>
                   <td className="px-4 py-2 text-right text-sm" style={{ color: '#E05B28' }}>
                     {fmt(filtered.reduce((s: number, p: any) => s + p.totalImportCost, 0))}
                   </td>

@@ -9,11 +9,15 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const [pendingFinalProducts, doneProducts, rejectedProducts] = await Promise.all([
-    getProducts({ status: 'pending_final' }),
-    getProducts({ status: 'done' }),
-    getProducts({ status: 'rejected' }),
-  ])
+  const all = await getProducts()
+  // Only show in Chốt nhập if NVMH has submitted pricing with totalPerUnit & totalPerBox calculated
+  const pendingFinalProducts = all.filter(p =>
+    p.status === 'pending_final' &&
+    (p.totalPerUnit || 0) > 0 &&
+    (p.totalPerBox || 0) > 0
+  )
+  const doneProducts     = all.filter(p => p.status === 'done')
+  const rejectedProducts = all.filter(p => p.status === 'rejected')
 
   // Enrich pending_final with pricings
   const withPricings = await Promise.all(pendingFinalProducts.map(async p => {
@@ -70,6 +74,13 @@ export async function GET() {
       assignedBuyerId: p.assignedBuyerId,
       assignedBuyerName: buyer?.name || '',
       rejectReason: p.rejectReason || '',
+      factoryCny: (p as any).factoryCny || 0,
+      qtyPerBox: (p as any).qtyPerBox || 0,
+      weightKg: (p as any).weightKg || 0,
+      volumeM3: (p as any).volumeM3 || 0,
+      domesticFreightCny: (p as any).domesticFreightCny || 0,
+      inspectionVnd: (p as any).inspectionVnd || 0,
+      quarantineCny: (p as any).quarantineCny || 0,
     }
   }).sort((a, b) => (b.decidedAt || 0) - (a.decidedAt || 0))
 

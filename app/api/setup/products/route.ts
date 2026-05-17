@@ -7,6 +7,6 @@ export async function GET() {
   if (!session || (session.user as any)?.role !== 'LEADER_PM') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const products = await getProducts({ status: 'pending_setup' })
+  const products = await getProducts()
   return NextResponse.json(products)
 }

@@ -62,6 +62,29 @@ interface DecidedProduct {
   assignedBuyerId?: string
   assignedBuyerName?: string
   rejectReason?: string
+  factoryCny?: number
+  qtyPerBox?: number
+  weightKg?: number
+  volumeM3?: number
+  domesticFreightCny?: number
+  inspectionVnd?: number
+  quarantineCny?: number
+}
+
+interface EditForm {
+  factoryCny: string; qtyPerBox: string; weightKg: string; volumeM3: string
+  domesticFreightCny: string; inspectionVnd: string; quarantineCny: string
+}
+function initEditForm(p: DecidedProduct): EditForm {
+  return {
+    factoryCny: p.factoryCny ? String(p.factoryCny) : '',
+    qtyPerBox: p.qtyPerBox ? String(p.qtyPerBox) : '',
+    weightKg: p.weightKg ? String(p.weightKg) : '',
+    volumeM3: p.volumeM3 ? String(p.volumeM3) : '',
+    domesticFreightCny: p.domesticFreightCny ? String(p.domesticFreightCny) : '',
+    inspectionVnd: p.inspectionVnd ? String(p.inspectionVnd) : '',
+    quarantineCny: p.quarantineCny ? String(p.quarantineCny) : '',
+  }
 }
 
 interface DecideContentProps {
@@ -71,6 +94,12 @@ interface DecideContentProps {
 function fmt(n: number) {
   return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
 }
+function fmtInput(v: string | number): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  if (!digits || digits === '0') return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+function stripDots(s: string): string { return s.replace(/\./g, '') }
 
 function isUrl(s?: string): boolean {
   return !!s && (s.startsWith('http://') || s.startsWith('https://'))
@@ -98,9 +127,18 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
   const [saving, setSaving] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   // cancel / edit state
-  const [editPrice, setEditPrice] = useState<Record<string, string>>({})
+  const [editForms, setEditForms] = useState<Record<string, EditForm>>({})
+  const [editFormOpen, setEditFormOpen] = useState<Record<string, boolean>>({})
+  const [savingEdit, setSavingEdit] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
-  const [editingPrice, setEditingPrice] = useState<string | null>(null)
+  const [notifIds, setNotifIds] = useState<Set<string>>(new Set())
+
+  function loadNotifs() {
+    fetch('/api/notifications/unread')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data.productIds)) setNotifIds(new Set(data.productIds)) })
+      .catch(() => {})
+  }
 
   function showToast(msg: string) {
     setToast(msg)
@@ -123,6 +161,12 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
       })
       .catch(() => setLoading(false))
   }
+
+  useEffect(() => {
+    loadNotifs()
+    const interval = setInterval(loadNotifs, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => { load() }, [])
 
@@ -167,22 +211,36 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
     }
   }
 
-  async function saveEditPrice(p: DecidedProduct) {
-    const price = Number(editPrice[p.id])
-    if (!price || price <= 0) { showToast('Nhập giá hợp lệ'); return }
-    setEditingPrice(p.id)
-    try {
-      await fetch(`/api/products/${p.id}/decide`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'edit_price', newPrice: price }),
-      })
-      showToast('Đã cập nhật giá')
-      setEditPrice(prev => ({ ...prev, [p.id]: '' }))
-      load()
-    } finally {
-      setEditingPrice(null)
+  async function saveEditPricing(p: DecidedProduct) {
+    const form = editForms[p.id]
+    if (!form?.factoryCny || !form?.qtyPerBox || !form?.volumeM3) {
+      showToast('Vui lòng nhập đủ các trường bắt buộc (*)')
+      return
     }
+    setSavingEdit(p.id)
+    try {
+      const res = await fetch(`/api/products/${p.id}/pricing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          factoryCny: form.factoryCny,
+          qtyPerBox: form.qtyPerBox,
+          weightKg: form.weightKg,
+          volumeM3: form.volumeM3,
+          domesticFreightCny: form.domesticFreightCny,
+          inspectionVnd: stripDots(form.inspectionVnd),
+          quarantineCny: form.quarantineCny,
+        }),
+      })
+      if (res.ok) {
+        showToast('✅ Đã cập nhật giá')
+        setEditFormOpen(prev => ({ ...prev, [p.id]: false }))
+        load()
+      } else {
+        showToast('Lỗi khi cập nhật giá')
+      }
+    } catch { showToast('Lỗi khi cập nhật giá') }
+    finally { setSavingEdit(null) }
   }
 
   if (loading) {
@@ -247,13 +305,21 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                 <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
                   <button
                     className="w-full flex items-start gap-3 p-4 text-left hover:bg-[#FAFAFA]"
-                    onClick={() => setExpanded(isOpen ? null : product.id)}
+                    onClick={() => {
+                      setExpanded(isOpen ? null : product.id)
+                      if (!isOpen) setNotifIds(prev => { const s = new Set(prev); s.delete(product.id); return s })
+                    }}
                   >
                     <span className="px-2 py-0.5 text-xs font-mono rounded font-semibold shrink-0 mt-0.5" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
                       {product.checkCode}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[#111827] truncate">{product.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-[#111827] truncate">{product.name}</p>
+                        {notifIds.has(product.id) && (
+                          <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>💬 Mới</span>
+                        )}
+                      </div>
                       {activePricing && (
                         <p className="text-xs text-[#6B7280] mt-0.5">
                           💰 {fmt(activePricing.totalPerUnit)}/chiếc
@@ -518,6 +584,9 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                   <div className="flex items-center gap-3 mb-3">
                     <span className="px-2 py-0.5 text-xs font-mono rounded font-semibold shrink-0" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>{p.checkCode}</span>
                     <span className="flex-1 text-sm font-semibold text-[#111827] truncate">{p.name}</span>
+                    {notifIds.has(p.id) && (
+                      <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>💬 Mới</span>
+                    )}
                     <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: p.status === 'done' ? '#DCFCE7' : '#FEE2E2', color: p.status === 'done' ? '#16A34A' : '#DC2626' }}>
                       {p.status === 'done' ? '✅ Nhập' : '❌ Không'}
                     </span>
@@ -532,27 +601,64 @@ export default function DecideContent({ currentUser }: DecideContentProps) {
                     {p.rejectReason && <span>📝 {p.rejectReason}</span>}
                   </div>
                   {p.status === 'done' && (
-                    <div className="flex gap-2 mt-3 flex-wrap">
-                      <div className="flex gap-1 flex-1 min-w-[160px]">
-                        <input type="number" placeholder="Sửa giá/chiếc"
-                          value={editPrice[p.id] || ''}
-                          onChange={e => setEditPrice(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          className="flex-1 px-2 py-1.5 border border-[#E5E7EB] rounded-lg text-xs focus:outline-none" />
+                    <div className="mt-3">
+                      <div className="flex gap-2 flex-wrap mb-2">
                         <button
-                          onClick={() => saveEditPrice(p)}
-                          disabled={editingPrice === p.id || !editPrice[p.id]}
+                          onClick={() => {
+                            if (!editForms[p.id]) setEditForms(prev => ({ ...prev, [p.id]: initEditForm(p) }))
+                            setEditFormOpen(prev => ({ ...prev, [p.id]: !prev[p.id] }))
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{ backgroundColor: editFormOpen[p.id] ? '#DBEAFE' : '#FFF3EE', color: editFormOpen[p.id] ? '#1D4ED8' : '#E05B28' }}>
+                          {editFormOpen[p.id] ? '▲ Đóng' : '✏️ Sửa giá'}
+                        </button>
+                        <button
+                          onClick={() => cancelImport(p)}
+                          disabled={cancelling === p.id}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-                          style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
-                          {editingPrice === p.id ? '...' : '✏️ Sửa giá'}
+                          style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
+                          {cancelling === p.id ? '...' : '🚫 Huỷ nhập'}
                         </button>
                       </div>
-                      <button
-                        onClick={() => cancelImport(p)}
-                        disabled={cancelling === p.id}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-                        style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
-                        {cancelling === p.id ? '...' : '🚫 Huỷ nhập'}
-                      </button>
+                      {editFormOpen[p.id] && (
+                        <div className="p-3 rounded-xl border border-[#E5E7EB] bg-[#FAFAFA]">
+                          <p className="text-[11px] font-semibold text-[#374151] mb-2">✏️ Cập nhật giá — nhập lại thông tin</p>
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            {[
+                              { key: 'factoryCny', label: 'Giá xuất xưởng (¥/chiếc) *', type: 'number', step: '0.01' },
+                              { key: 'qtyPerBox', label: 'Số lượng/thùng (chiếc) *', type: 'number', step: '1' },
+                              { key: 'weightKg', label: 'Cân nặng/thùng (kg)', type: 'number', step: '0.01' },
+                              { key: 'volumeM3', label: 'Số khối/thùng (m³) *', type: 'number', step: '0.001' },
+                              { key: 'domesticFreightCny', label: 'Cước nội địa TQ (¥/chiếc)', type: 'number', step: '0.01' },
+                              { key: 'quarantineCny', label: 'Phí kiểm dịch (¥/chiếc)', type: 'number', step: '0.01' },
+                            ].map(({ key, label, type, step }) => (
+                              <div key={key}>
+                                <label className="text-[10px] text-[#6B7280] mb-0.5 block">{label}</label>
+                                <input
+                                  type={type} step={step} min="0"
+                                  value={(editForms[p.id] as any)?.[key] ?? ''}
+                                  onChange={e => setEditForms(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || initEditForm(p)), [key]: e.target.value } }))}
+                                  className="w-full px-2 py-1 border border-[#E5E7EB] rounded-lg text-xs focus:outline-none focus:border-[#E05B28]" />
+                              </div>
+                            ))}
+                            <div>
+                              <label className="text-[10px] text-[#6B7280] mb-0.5 block">Phí kiểm định (₫/chiếc)</label>
+                              <input
+                                type="text"
+                                value={fmtInput(editForms[p.id]?.inspectionVnd ?? '')}
+                                onChange={e => setEditForms(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || initEditForm(p)), inspectionVnd: stripDots(e.target.value) } }))}
+                                className="w-full px-2 py-1 border border-[#E5E7EB] rounded-lg text-xs focus:outline-none focus:border-[#E05B28]" />
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => saveEditPricing(p)}
+                            disabled={savingEdit === p.id}
+                            className="w-full py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                            style={{ backgroundColor: '#E05B28' }}>
+                            {savingEdit === p.id ? '⏳ Đang tính...' : '💾 Tính & Lưu'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

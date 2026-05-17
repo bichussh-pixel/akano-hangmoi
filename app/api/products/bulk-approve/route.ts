@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { getProduct, saveProduct, generateCheckCode } from '@/lib/firebase'
+import { getProduct, saveProduct, generateCheckCode, saveActivity } from '@/lib/firebase'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
@@ -45,6 +45,16 @@ export async function POST(req: Request) {
       ...extra,
     })
     results.push({ id, checkCode })
+    await saveActivity({
+      type: 'approved',
+      productId: id,
+      productName: product.name,
+      checkCode,
+      userId: user.id,
+      userName: user.name || user.id,
+      timestamp: Date.now(),
+      meta: { checkCode },
+    })
   }
   return NextResponse.json({ approved: results })
 }

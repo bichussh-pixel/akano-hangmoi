@@ -1,17 +1,15 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import AppLayout from '@/components/layouts/AppLayout'
-import ImportsContent from './ImportsContent'
+import ActivitiesContent from './ActivitiesContent'
 
-export default async function ImportsPage() {
+export default async function ActivitiesPage() {
   const session = await auth()
   if (!session) redirect('/login')
-  const role = (session.user as any)?.role
-  if (role !== 'ADMIN' && role !== 'LEADER_PM') redirect('/dashboard')
 
   return (
     <AppLayout>
-      <ImportsContent />
+      <ActivitiesContent />
     </AppLayout>
   )
 }

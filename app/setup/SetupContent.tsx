@@ -13,12 +13,50 @@ interface Product {
   name: string
   checkCode: string
   marketPrice: number
+  sales30d?: number
+  revenue30d?: number
+  growthRate?: number
   category?: string
+  imageUrl?: string
+  shopUrl?: string
+  kaloUrl?: string
+  specWeight?: string
+  specDimensions?: string
+  specMaterial?: string
+  specUseCases?: string
+  importQty?: number
+  estimatedImportPrice?: number
   exportTaxPct?: number
   importTaxPct?: number
   hsCode?: string
   hsDescription?: string
+  inspectionVnd?: number
+  quarantineCny?: number
+  otherCostAmount?: number
+  otherCostCurrency?: string
+  setupNotes?: string
 }
+
+function isUrl(s?: string) { return !!s && (s.startsWith('http://') || s.startsWith('https://')) }
+function getShopLink(p: Product): string | null {
+  if (isUrl(p.shopUrl)) return p.shopUrl!
+  if (p.name) return `https://www.tiktok.com/search?q=${encodeURIComponent(p.name)}&type=item`
+  return null
+}
+function getKaloLink(p: Product): string | null {
+  if (isUrl(p.kaloUrl)) return p.kaloUrl!
+  if (p.name) return `https://kalodata.com/vn/product/search?keyword=${encodeURIComponent(p.name)}&region=VN`
+  return null
+}
+function fmt(n: number) {
+  return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ'
+}
+function fmtInput(v: string | number): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  if (!digits || digits === '0') return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+function stripDots(s: string): string { return s.replace(/\./g, '') }
 
 interface Buyer {
   id: string
@@ -118,6 +156,11 @@ export default function SetupContent() {
           importTaxPct: data.importTaxPct ?? product.importTaxPct ?? 0,
           hsCode: data.hsCode ?? product.hsCode ?? '',
           hsDescription: data.hsDescription ?? product.hsDescription ?? '',
+          inspectionVnd: data.inspectionVnd ?? product.inspectionVnd ?? 0,
+          quarantineCny: data.quarantineCny ?? product.quarantineCny ?? 0,
+          otherCostAmount: data.otherCostAmount ?? product.otherCostAmount ?? 0,
+          otherCostCurrency: data.otherCostCurrency ?? product.otherCostCurrency ?? 'VND',
+          setupNotes: data.setupNotes ?? product.setupNotes ?? '',
           dailyRateId: dailyRate.id,
           assignedUserIds: assignments[product.id] || [],
         }),
@@ -165,30 +208,30 @@ export default function SetupContent() {
           <div>
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">Tỷ giá CNY → VND</label>
             <input
-              type="number"
-              value={fxRate}
-              onChange={e => setFxRate(e.target.value)}
-              placeholder="VD: 3500"
+              type="text"
+              value={fmtInput(fxRate)}
+              onChange={e => setFxRate(stripDots(e.target.value))}
+              placeholder="VD: 3.500"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
           <div>
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">🚛 Cước Nguyên Xe (VND/m³)</label>
             <input
-              type="number"
-              value={freightNguyenXe}
-              onChange={e => setFreightNguyenXe(e.target.value)}
-              placeholder="VD: 5600000"
+              type="text"
+              value={fmtInput(freightNguyenXe)}
+              onChange={e => setFreightNguyenXe(stripDots(e.target.value))}
+              placeholder="VD: 5.600.000"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
           <div>
             <label className="text-xs font-medium text-[#6B7280] mb-1 block">📦 Cước Ghép Xe (VND/m³)</label>
             <input
-              type="number"
-              value={freightGhepXe}
-              onChange={e => setFreightGhepXe(e.target.value)}
-              placeholder="VD: 8500000"
+              type="text"
+              value={fmtInput(freightGhepXe)}
+              onChange={e => setFreightGhepXe(stripDots(e.target.value))}
+              placeholder="VD: 8.500.000"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
             />
           </div>
@@ -219,18 +262,75 @@ export default function SetupContent() {
             return (
               <div key={product.id} className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
                 <button
-                  className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#FAFAFA]"
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#FAFAFA]"
                   onClick={() => setExpanded(isOpen ? null : product.id)}
                 >
-                  <span
-                    className="px-2 py-0.5 text-xs font-mono rounded font-semibold"
-                    style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}
-                  >
-                    {product.checkCode}
-                  </span>
-                  <span className="flex-1 text-sm font-medium text-[#111827]">{product.name}</span>
-                  <span className="text-xs text-[#6B7280]">{product.category}</span>
-                  <span className="text-[#6B7280]">{isOpen ? '▲' : '▼'}</span>
+                  {/* Thumbnail */}
+                  <div className="w-14 h-14 rounded-xl bg-[#F3F4F6] flex items-center justify-center text-2xl shrink-0 overflow-hidden border border-[#E5E7EB]">
+                    {product.imageUrl
+                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      : <span>📦</span>
+                    }
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="px-2 py-0.5 text-xs font-mono rounded font-semibold shrink-0" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
+                        {product.checkCode}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-[#111827] leading-snug line-clamp-2">{product.name}</h3>
+                    {product.category && (
+                      <p className="text-xs text-[#9CA3AF] mt-0.5 truncate">{product.category}</p>
+                    )}
+                    {/* Specs */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs mt-1.5">
+                      <span className={product.specWeight ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                        🏋️ {product.specWeight || 'Chưa nhập cân nặng'}
+                      </span>
+                      <span className={product.specDimensions ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                        📐 {product.specDimensions || 'Chưa nhập kích thước'}
+                      </span>
+                      <span className={product.specMaterial ? 'text-[#374151]' : 'text-[#9CA3AF]'}>
+                        🧵 {product.specMaterial || 'Chưa nhập chất liệu'}
+                      </span>
+                      {product.specUseCases && (
+                        <span className="text-[#374151]">✅ {product.specUseCases}</span>
+                      )}
+                    </div>
+                    {/* SL nhập badge + links */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {product.importQty ? (
+                        <span className="text-xs px-2 py-0.5 rounded-lg font-semibold" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
+                          📦 SL nhập: {product.importQty} thùng
+                        </span>
+                      ) : null}
+                      {product.estimatedImportPrice ? (
+                        <span className="text-xs px-2 py-0.5 rounded-lg font-semibold" style={{ backgroundColor: '#FFF3EE', color: '#E05B28' }}>
+                          💰 Giá dự kiến: {fmt(product.estimatedImportPrice)}/chiếc
+                        </span>
+                      ) : null}
+                      {getShopLink(product) && (
+                        <a href={getShopLink(product)!} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold no-underline"
+                          style={{ background: 'linear-gradient(135deg,#EC4899,#DB2777)' }}>
+                          🏆 Shop bán chạy
+                        </a>
+                      )}
+                      {getKaloLink(product) && (
+                        <a href={getKaloLink(product)!} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold no-underline"
+                          style={{ background: '#EEF2FF', color: '#4361EE', border: '1px solid #C7D2FE' }}>
+                          🔗 Kalodata
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="text-[#6B7280] shrink-0">{isOpen ? '▲' : '▼'}</span>
                 </button>
 
                 {isOpen && (
@@ -272,6 +372,61 @@ export default function SetupContent() {
                           onChange={e => updateField(product.id, 'hsDescription', e.target.value)}
                           placeholder="Mô tả mã HS..."
                           className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Chi phí bổ sung */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="text-xs font-medium text-[#6B7280] mb-1 block">Phí kiểm định (VND/chiếc)</label>
+                        <input
+                          type="text"
+                          value={fmtInput(data.inspectionVnd ?? product.inspectionVnd ?? '')}
+                          onChange={e => updateField(product.id, 'inspectionVnd', stripDots(e.target.value))}
+                          placeholder="VD: 5.000"
+                          className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-[#6B7280] mb-1 block">Phí kiểm dịch (tệ/chiếc)</label>
+                        <input
+                          type="number"
+                          defaultValue={product.quarantineCny ?? 0}
+                          onChange={e => updateField(product.id, 'quarantineCny', e.target.value)}
+                          placeholder="VD: 0.5"
+                          className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-medium text-[#6B7280] mb-1 block">Chi phí khác</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={fmtInput(data.otherCostAmount ?? product.otherCostAmount ?? '')}
+                            onChange={e => updateField(product.id, 'otherCostAmount', stripDots(e.target.value))}
+                            placeholder="Số tiền"
+                            className="flex-1 px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none"
+                          />
+                          <select
+                            defaultValue={product.otherCostCurrency ?? 'VND'}
+                            onChange={e => updateField(product.id, 'otherCostCurrency', e.target.value)}
+                            className="w-24 px-2 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none bg-white"
+                          >
+                            <option value="VND">VND</option>
+                            <option value="CNY">Ệ (CNY)</option>
+                            <option value="USD">USD</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-medium text-[#6B7280] mb-1 block">Ghi chú</label>
+                        <textarea
+                          defaultValue={product.setupNotes ?? ''}
+                          onChange={e => updateField(product.id, 'setupNotes', e.target.value)}
+                          placeholder="Ghi chú thêm cho NVMH..."
+                          rows={2}
+                          className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none resize-none"
                         />
                       </div>
                     </div>

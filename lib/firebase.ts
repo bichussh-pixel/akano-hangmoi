@@ -308,3 +308,39 @@ export async function markNotificationsRead(userId: string): Promise<void> {
   }
   if (Object.keys(updates).length > 0) await db().ref().update(updates)
 }
+
+// ─── Activities ───────────────────────────────────────────────────────────────
+
+export type ActivityType =
+  | 'approved'
+  | 'rejected'
+  | 'priced'
+  | 'price_updated'
+  | 'setup'
+  | 'decided_import'
+  | 'decided_reject'
+  | 'cancelled'
+
+export interface Activity {
+  id?: string
+  type: ActivityType
+  productId: string
+  productName: string
+  checkCode?: string
+  userId: string
+  userName: string
+  timestamp: number
+  meta?: Record<string, unknown>
+}
+
+export async function saveActivity(data: Omit<Activity, 'id'>): Promise<void> {
+  await fbPush('activities', data)
+}
+
+export async function getActivities(limit = 150): Promise<Activity[]> {
+  const snap = await db().ref('activities').orderByChild('timestamp').limitToLast(limit).once('value')
+  if (!snap.exists()) return []
+  const entries: Activity[] = []
+  snap.forEach(child => { entries.push({ ...child.val(), id: child.key }) })
+  return entries.reverse() // most recent first
+}

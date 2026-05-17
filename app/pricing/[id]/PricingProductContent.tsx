@@ -42,6 +42,9 @@ interface Product {
   dailyRate?: DailyRate
   exportTaxPct?: number
   importTaxPct?: number
+  estimatedImportPrice?: number
+  importQty?: number
+  photos?: string[]
 }
 
 function fmt(n: number) {
@@ -50,6 +53,12 @@ function fmt(n: number) {
 function fmtNum(n: number) {
   return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
+function fmtInput(v: string | number): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  if (!digits || digits === '0') return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+function stripDots(s: string): string { return s.replace(/\./g, '') }
 function isUrl(s?: string) { return !!s && (s.startsWith('http://') || s.startsWith('https://')) }
 function getShopLink(p: Product): string | null {
   if (isUrl(p.shopUrl)) return p.shopUrl!
@@ -275,6 +284,17 @@ export default function PricingProductContent({ productId, currentUser }: Props)
                 </span>
                 {product.specUseCases && <span className="text-[#374151] col-span-2">✅ {product.specUseCases}</span>}
               </div>
+              {/* Review info: SL nhập + Giá nhập dự kiến */}
+              {(product.importQty || product.estimatedImportPrice) && (
+                <div className="flex flex-wrap gap-3 text-xs mb-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                  {product.importQty ? (
+                    <span className="text-[#15803D]">📦 SL nhập: <strong>{product.importQty} thùng</strong></span>
+                  ) : null}
+                  {product.estimatedImportPrice ? (
+                    <span className="text-[#15803D]">💰 Giá dự kiến: <strong>{fmt(product.estimatedImportPrice)}/chiếc</strong></span>
+                  ) : null}
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap">
                 {getShopLink(product) && (
                   <a href={getShopLink(product)!} target="_blank" rel="noreferrer"
@@ -293,6 +313,20 @@ export default function PricingProductContent({ productId, currentUser }: Props)
               </div>
             </div>
           </div>
+
+          {/* Review photos */}
+          {product.photos && product.photos.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-semibold text-[#6B7280] mb-2">🖼️ Ảnh sản phẩm</div>
+              <div className="flex flex-wrap gap-2">
+                {product.photos.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer">
+                    <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-[#E5E7EB] hover:opacity-80 transition-opacity" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Import range hint */}
           {importRange && (
@@ -367,7 +401,7 @@ export default function PricingProductContent({ productId, currentUser }: Props)
               { key: 'weightKgPerBox', label: 'Cân nặng/thùng (kg)' },
               { key: 'volumeM3PerBox', label: 'Số khối/thùng (m³)', required: true },
               { key: 'domesticFreightCny', label: 'Cước nội địa TQ (CNY/chiếc)' },
-              { key: 'inspectionVnd', label: 'Phí kiểm định (VND/chiếc)' },
+              { key: 'inspectionVnd', label: 'Phí kiểm định (VND/chiếc)', vnd: true },
               { key: 'quarantineCny', label: 'Phí kiểm dịch (tệ/chiếc)' },
             ].map(field => (
               <div key={field.key}>
@@ -375,9 +409,9 @@ export default function PricingProductContent({ productId, currentUser }: Props)
                   {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
                 </label>
                 <input
-                  type="number"
-                  value={form[field.key] ?? ''}
-                  onChange={e => update(field.key, e.target.value)}
+                  type={field.vnd ? 'text' : 'number'}
+                  value={field.vnd ? fmtInput(form[field.key] ?? '') : (form[field.key] ?? '')}
+                  onChange={e => update(field.key, field.vnd ? stripDots(e.target.value) : e.target.value)}
                   className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:border-[#E05B28]"
                 />
               </div>

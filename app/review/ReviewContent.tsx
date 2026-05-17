@@ -39,6 +39,12 @@ function fmt(n: number) {
 function fmtNum(n: number) {
   return Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
+function fmtInput(v: string | number): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  if (!digits || digits === '0') return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+function stripDots(s: string): string { return s.replace(/\./g, '') }
 
 function isUrl(s?: string): boolean {
   return !!s && (s.startsWith('http://') || s.startsWith('https://'))
@@ -124,8 +130,8 @@ function ReviewedEditPanel({ p, onClose, onSaved }: { p: any; onClose: () => voi
         </div>
         <div className="flex-1">
           <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
-          <input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)}
-            placeholder="VD: 45000" className={inpCls} />
+          <input type="text" min="0" value={fmtInput(price)} onChange={e => setPrice(stripDots(e.target.value))}
+            placeholder="VD: 45.000" className={inpCls} />
           {(() => {
             const range = calcImportRange(p.marketPrice)
             if (!range) return null
@@ -773,9 +779,9 @@ export default function ReviewContent() {
                             </div>
                             <div className="flex-1">
                               <label className="text-xs text-[#6B7280] font-semibold mb-1 block">💰 Giá nhập dự kiến (đ/chiếc)</label>
-                              <input type="number" min="0" value={estimatedPrices[p.id] || ''}
-                                onChange={e => setEstimatedPrices(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                placeholder="VD: 45000" className={inpCls} />
+                              <input type="text" min="0" value={fmtInput(estimatedPrices[p.id] || '')}
+                                onChange={e => setEstimatedPrices(prev => ({ ...prev, [p.id]: stripDots(e.target.value) }))}
+                                placeholder="VD: 45.000" className={inpCls} />
                               {(() => {
                                 const range = calcImportRange(p.marketPrice)
                                 if (!range) return null

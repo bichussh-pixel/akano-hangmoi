@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { saveProduct } from '@/lib/firebase'
+import { getProduct, saveProduct, saveActivity } from '@/lib/firebase'
 import { NextResponse } from 'next/server'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,12 +13,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { action } = body
 
   if (action === 'reject') {
+    const product = await getProduct(id)
     await saveProduct(id, {
       status: 'rejected',
       rejectReason: body.reason || 'Không duyệt',
       decidedBy: user.id,
       decidedAt: Date.now(),
     })
+    if (product) {
+      await saveActivity({
+        type: 'rejected',
+        productId: id,
+        productName: product.name,
+        checkCode: product.checkCode,
+        userId: user.id,
+        userName: user.name || user.id,
+        timestamp: Date.now(),
+        meta: { reason: body.reason || 'Không duyệt' },
+      })
+    }
     return NextResponse.json({ ok: true })
   }
 

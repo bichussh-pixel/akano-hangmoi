@@ -6,12 +6,12 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   const session = await auth()
   const user = session?.user as any
-  if (!session || user?.role !== 'ADMIN') {
+  if (!session || !['ADMIN', 'LEADER_PM'].includes(user?.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const done = await getProducts({ status: 'done' })
-  const products = done
+  const all = await getProducts()
+  const products = all.filter(p => p.status === 'done')
     .sort((a, b) => (b.decidedAt || 0) - (a.decidedAt || 0))
     .map(p => {
       const buyer = USERS.find(u => u.id === p.assignedBuyerId)
@@ -20,12 +20,14 @@ export async function GET() {
         name: p.name,
         checkCode: p.checkCode,
         totalPerUnit: p.totalPerUnit || 0,
+        qtyPerBox: p.qtyPerBox || 1,
         importQty: p.importQty || 0,
-        totalImportCost: p.totalImportCost || 0,
+        totalImportCost: (p.totalPerUnit || 0) * (p.qtyPerBox || 1) * (p.importQty || 0),
         importWarehouse: p.importWarehouse || '',
         decidedAt: p.decidedAt || 0,
         assignedBuyerId: p.assignedBuyerId || '',
         assignedBuyerName: buyer?.name || '',
+        kiotCode: p.kiotCode || '',
       }
     })
 

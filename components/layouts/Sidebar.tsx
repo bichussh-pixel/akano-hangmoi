@@ -50,23 +50,25 @@ interface SidebarProps {
 
 const navItems: Record<string, { label: string; href: string; icon: string }[]> = {
   ADMIN: [
-    { label: 'Dashboard',        href: '/dashboard', icon: '📊' },
-    { label: 'Import Kalodata',  href: '/import',    icon: '📥' },
-    { label: 'Duyệt hàng',       href: '/review',    icon: '✅' },
-    { label: 'Chốt nhập',        href: '/decide',    icon: '🏁' },
-    { label: 'Đã nhập',          href: '/imports',   icon: '📦' },
+    { label: 'Dashboard',        href: '/dashboard',   icon: '📊' },
+    { label: 'Import Kalodata',  href: '/import',      icon: '📥' },
+    { label: 'Duyệt hàng',       href: '/review',      icon: '✅' },
+    { label: 'Chốt nhập',        href: '/decide',      icon: '🏁' },
+    { label: 'Đã nhập',          href: '/imports',     icon: '📦' },
+    { label: 'Nhật ký',          href: '/activities',  icon: '📋' },
   ],
   LEADER_PM: [
-    { label: 'Dashboard',          href: '/dashboard', icon: '📊' },
-    { label: 'Thiết lập check giá', href: '/setup',    icon: '⚙️' },
-    { label: 'Check giá',           href: '/pricing',  icon: '💰' },
-    { label: 'Quyết định',          href: '/decide',   icon: '🏁' },
-    { label: 'DS nhập',             href: '/imports',  icon: '📦' },
+    { label: 'Dashboard',          href: '/dashboard',  icon: '📊' },
+    { label: 'Thiết lập check giá', href: '/setup',     icon: '⚙️' },
+    { label: 'Check giá',           href: '/pricing',   icon: '💰' },
+    { label: 'DS nhập',             href: '/imports',   icon: '📦' },
+    { label: 'Nhật ký',             href: '/activities', icon: '📋' },
   ],
   BUYER: [
-    { label: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { label: 'Check giá', href: '/pricing',  icon: '💰' },
-    { label: 'Tạo mã Kiot', href: '/kiot',  icon: '🏷️' },
+    { label: 'Dashboard',   href: '/dashboard',  icon: '📊' },
+    { label: 'Check giá',   href: '/pricing',    icon: '💰' },
+    { label: 'Tạo mã Kiot', href: '/kiot',       icon: '🏷️' },
+    { label: 'Nhật ký',     href: '/activities', icon: '📋' },
   ],
 }
 
